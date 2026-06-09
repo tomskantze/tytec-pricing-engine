@@ -1,0 +1,62 @@
+.invoice-detail-meta {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.invoice-detail-meta-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.invoice-detail-item {
+  border: 1px solid var(--erp-border-soft);
+  border-radius: 7px;
+  background: var(--erp-surface-soft);
+  color: var(--erp-muted);
+  font-size: 11px;
+  padding: 4px 7px;
+}
+
+.invoice-detail-item strong {
+  color: var(--erp-text);
+  font-weight: 640;
+}
+
+.invoice-summary-row td {
+  border-top: 1px solid var(--erp-border-soft);
+  background: var(--erp-surface-soft);
+  color: var(--erp-text);
+  font-size: 11px;
+}
+
+.invoice-summary-row.is-muted td {
+  color: var(--erp-muted);
+  opacity: 0.62;
+}
+
+.invoice-total-row td {
+  background: var(--erp-surface);
+}
+
+.invoice-job-table .ant-table-tbody > tr:hover > td {
+  cursor: pointer;
+}
+
+.invoice-manual-panel {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.invoice-manual-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.invoice-manual-head .page-description {
+  margin: 2px 0 0;
+}

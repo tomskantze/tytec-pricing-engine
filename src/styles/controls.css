@@ -1,0 +1,257 @@
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 42px;
+  margin-bottom: 2px;
+}
+
+.page-header h1.ant-typography {
+  margin: 0;
+  color: var(--erp-text);
+  font-size: 27px;
+  font-weight: 780;
+  letter-spacing: -0.04em;
+  line-height: 1.06;
+}
+
+.page-description {
+  display: block;
+  margin-top: 4px;
+  color: var(--erp-muted);
+  font-size: 12px;
+}
+
+.workspace-card,
+.section-card {
+  border: 1px solid var(--erp-border);
+  border-radius: var(--erp-radius);
+  background: var(--erp-surface);
+  box-shadow: var(--erp-surface-shadow);
+}
+
+.workspace-card .ant-card-body,
+.section-card .ant-card-body {
+  padding: var(--erp-surface-padding);
+}
+
+.ant-btn {
+  box-shadow: none !important;
+}
+
+.ant-btn-primary {
+  background: var(--erp-primary);
+  border-color: var(--erp-primary);
+}
+
+.ant-btn-primary:not(:disabled):hover,
+.ant-btn-primary:not(:disabled):focus-visible {
+  background: var(--erp-primary-dark);
+  border-color: var(--erp-primary-dark);
+}
+
+.page-header .ant-upload-wrapper,
+.toolbar-row .ant-upload-wrapper {
+  display: inline-flex;
+}
+
+.metric-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.metric-card,
+.info-field {
+  min-width: 0;
+  border: 1px solid var(--erp-border-soft);
+  border-radius: 7px;
+  background: var(--erp-surface-soft);
+}
+
+.metric-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 42px;
+  padding: 7px 9px;
+}
+
+.metric-card span,
+.info-field span,
+.section-title,
+.ant-form-item-label > label {
+  color: #65778a !important;
+  font-size: 8.5px !important;
+  font-weight: 640 !important;
+  letter-spacing: 0.065em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.metric-card strong,
+.info-field strong {
+  min-width: 0;
+  color: var(--erp-text);
+  font-size: 12px;
+  font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.table-primary-text {
+  display: block;
+  min-width: 0;
+  color: var(--erp-text);
+  font-weight: 430;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toolbar-row,
+.invoice-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 9px;
+}
+
+.toolbar-search {
+  width: min(470px, 100%);
+}
+
+.toolbar-count {
+  color: var(--erp-muted);
+  font-size: 11px;
+  font-weight: 560;
+  white-space: nowrap;
+}
+
+.pricing-upload-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  align-items: stretch;
+}
+
+.pricing-upload-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.document-store-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.document-store-list .info-field {
+  padding: 7px 9px;
+}
+
+.review-actions {
+  width: 100%;
+}
+
+.review-actions .ant-select,
+.review-actions .ant-input-number,
+.review-actions .ant-input {
+  width: 150px;
+}
+
+.pricing-actions {
+  justify-content: center;
+}
+
+.pricing-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--erp-gap);
+}
+
+.invoice-metric-strip {
+  margin-bottom: 10px;
+}
+
+.invoice-detail-card {
+  overflow: hidden;
+}
+
+.edit-stack,
+.tab-stack {
+  display: grid;
+  gap: var(--erp-gap);
+}
+
+.form-grid {
+  display: grid;
+  gap: var(--erp-gap);
+}
+
+.form-grid-two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.drawer-action-row,
+.inline-detail-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.shift-edit-list {
+  display: grid;
+  gap: 8px;
+}
+
+.shift-edit-row {
+  display: grid;
+  grid-template-columns: minmax(130px, 1.4fr) repeat(4, minmax(82px, 1fr)) auto;
+  gap: 8px;
+  align-items: start;
+}
+
+.shift-edit-row .ant-form-item {
+  margin-bottom: 0;
+}
+
+.shift-remove-item,
+.shift-remove-item .ant-form-item-control-input {
+  margin-bottom: 0;
+}
+
+.shift-remove-item .ant-form-item-label > label {
+  visibility: hidden;
+}
+
+.sla-lines {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+  color: var(--erp-muted);
+  font-size: 11px;
+}
+
+@media (max-width: 900px) {
+  .pricing-upload-row,
+  .pricing-stat-grid,
+  .form-grid-two,
+  .shift-edit-row {
+    grid-template-columns: 1fr;
+  }
+
+  .page-header,
+  .toolbar-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .shift-remove-item .ant-form-item-label {
+    display: none;
+  }
+}

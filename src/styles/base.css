@@ -1,0 +1,40 @@
+:root {
+  --erp-bg: #f4f3f1;
+  --erp-surface: #ffffff;
+  --erp-surface-soft: #f8fafc;
+  --erp-sidebar: #151922;
+  --erp-sidebar-muted: rgba(255, 255, 255, 0.62);
+  --erp-text: #111827;
+  --erp-muted: #64748b;
+  --erp-border: #d7dde3;
+  --erp-border-soft: #e4e8ed;
+  --erp-surface-shadow: 0 1px 2px rgba(17, 24, 39, 0.04);
+  --erp-primary: #1f5974;
+  --erp-primary-dark: #16435a;
+  --erp-row-selected: #eef5f8;
+  --erp-row-hover: #f8fafb;
+  --erp-radius: 8px;
+  --erp-gap: 10px;
+  --erp-surface-padding: 10px;
+  --erp-control-height: 30px;
+  --erp-control-font-size: 12px;
+  --erp-nav-item-height: 31px;
+  --erp-nav-item-inline-padding: 13px;
+  font-family: Aptos, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100vh;
+}
+
+body {
+  margin: 0;
+  background: var(--erp-bg);
+  color: var(--erp-text);
+}

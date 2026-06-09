@@ -1,0 +1,153 @@
+.erp-data-table {
+  overflow: hidden;
+  border: 1px solid var(--erp-border);
+  border-radius: var(--erp-radius);
+  background: var(--erp-surface);
+  box-shadow: var(--erp-surface-shadow);
+}
+
+.erp-table .ant-table {
+  border: 0;
+  border-radius: 0;
+}
+
+.erp-table .ant-table-thead > tr > th {
+  height: 29px;
+  padding: 0 9px;
+  border-bottom: 1px solid #dfe4ea;
+  background: #f1f4f6 !important;
+  color: #5f7083;
+  font-size: 9px;
+  font-weight: 680;
+  letter-spacing: 0.075em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.erp-table .ant-table-tbody > tr > td {
+  height: 29px;
+  padding: 0 9px;
+  border-bottom: 1px solid #edf0f3;
+  background: var(--erp-surface);
+  color: #1f2937;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.erp-table .ant-table-tbody > tr:hover > td {
+  background: var(--erp-row-hover) !important;
+  cursor: pointer;
+}
+
+.erp-table .ant-table-tbody > tr.selected-row > td,
+.erp-table .ant-table-tbody > tr.selected-row:hover > td {
+  background: var(--erp-row-selected) !important;
+}
+
+.erp-table .ant-table-tbody > tr.expanded-row > td:first-child,
+.erp-table .ant-table-tbody > tr.expanded-row:hover > td:first-child {
+  box-shadow: inset 2px 0 0 var(--erp-primary-dark);
+}
+
+.erp-table .ant-table-content {
+  overflow-x: auto;
+}
+
+.nested-table .ant-table-tbody > tr:hover > td {
+  cursor: default;
+}
+
+.erp-table .ant-table-expanded-row > td {
+  padding: 10px !important;
+  background: #fbfaf8 !important;
+}
+
+.erp-table .table-article-input.ant-input,
+.erp-table .table-article-input .ant-input {
+  height: 23px;
+  padding: 0 7px;
+  border-radius: 5px;
+  font-size: 12px;
+  line-height: 21px;
+}
+
+.erp-table .table-article-input.ant-input-affix-wrapper {
+  height: 23px;
+  padding: 0 7px;
+  border-radius: 5px;
+}
+
+.erp-table .table-article-input.ant-input-affix-wrapper .ant-input {
+  height: 21px;
+  padding: 0;
+}
+
+.table-article-text {
+  color: var(--erp-text);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.table-article-text.is-missing {
+  color: var(--erp-muted);
+}
+
+.rate-card-detail-table .ant-table-thead > tr > th,
+.rate-card-detail-table .ant-table-tbody > tr > td {
+  padding-left: 7px;
+  padding-right: 7px;
+}
+
+.section-card-compact .ant-card-body {
+  padding: 8px;
+}
+
+.info-field {
+  display: grid;
+  gap: 2px;
+  color: var(--erp-muted);
+  font-size: 11px;
+}
+
+.info-field strong {
+  color: var(--erp-text);
+  font-size: 12px;
+}
+
+.info-field-spaced {
+  margin-top: 8px;
+  padding: 7px 9px;
+}
+
+.erp-status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 58px;
+  height: 20px;
+  padding: 0 8px;
+  border: 1px solid var(--erp-border);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 620;
+  line-height: 1;
+}
+
+.erp-status-badge-neutral {
+  background: var(--erp-surface-soft);
+  color: var(--erp-muted);
+}
+
+.erp-status-badge-success {
+  border-color: #b7dcc3;
+  background: #edf8f0;
+  color: #226139;
+}
+
+.erp-status-badge-warning {
+  border-color: #ead39a;
+  background: #fff8e4;
+  color: #7c5700;
+}

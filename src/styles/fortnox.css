@@ -1,0 +1,141 @@
+.fortnox-location-list {
+  display: grid;
+  gap: 10px;
+}
+
+.fortnox-location-section {
+  overflow: hidden;
+  border: 1px solid var(--erp-border);
+  border-radius: var(--erp-radius);
+  background: var(--erp-surface);
+}
+
+.fortnox-location-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 30px;
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--erp-border);
+  background: var(--erp-surface-soft);
+}
+
+.fortnox-location-head span {
+  color: var(--erp-muted);
+  font-size: 11px;
+  font-weight: 560;
+  white-space: nowrap;
+}
+
+.fortnox-location-title.ant-typography {
+  color: var(--erp-text);
+  font-weight: 720;
+}
+
+.fortnox-shift-matrix {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(230px, 1fr)) repeat(2, minmax(180px, 0.78fr));
+  gap: 8px;
+  padding: 8px;
+  overflow-x: auto;
+}
+
+.fortnox-shift-card {
+  overflow: hidden;
+  border: 1px solid var(--erp-border-soft);
+  border-radius: 6px;
+  background: #fbfcfd;
+}
+
+.fortnox-shift-card-head,
+.fortnox-shift-card-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 104px;
+  gap: 10px;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 8px;
+}
+
+.fortnox-shift-card-head {
+  border-bottom: 1px solid var(--erp-border-soft);
+  background: #f8fafb;
+}
+
+.fortnox-shift-card-head strong {
+  color: var(--erp-text);
+  font-size: 12px;
+  font-weight: 430;
+}
+
+.fortnox-shift-card-head span {
+  color: var(--erp-muted);
+  font-size: 9px;
+  font-weight: 680;
+  letter-spacing: 0.065em;
+  text-transform: uppercase;
+}
+
+.fortnox-shift-card-row {
+  border-bottom: 1px solid #edf0f3;
+  color: var(--erp-text);
+  font-size: 12px;
+}
+
+.fortnox-shift-card-row:last-child {
+  border-bottom: 0;
+}
+
+.fortnox-full-shift-card {
+  align-self: start;
+}
+
+.fortnox-shift-card-row .ant-btn {
+  justify-content: space-between;
+  height: 23px;
+  width: 100%;
+  padding: 0 7px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.fortnox-shift-card-row .ant-btn > span:not(.ant-btn-icon):not(.anticon) {
+  font-weight: 400;
+}
+
+.fortnox-missing-article {
+  border-color: #e0bd73;
+  color: #7c5700;
+}
+
+.fortnox-editor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.fortnox-editor-grid .info-field {
+  padding: 7px 9px;
+}
+
+.fortnox-editor-input {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 620px) {
+  .fortnox-location-head,
+  .toolbar-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .fortnox-editor-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .fortnox-shift-matrix {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
