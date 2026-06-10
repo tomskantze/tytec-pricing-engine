@@ -57,6 +57,14 @@ function cityTokens(card: LocationCard): string[] {
   return [card.city, card.cityCode, ...codes, ...names].map(normalizeLocationText).filter(Boolean);
 }
 
+export function getLocationCardForText(customer: Customer, value: string): LocationCard | undefined {
+  const normalized = normalizeLocationText(value);
+  if (!normalized) return undefined;
+  return customer.locationCards.find((card) =>
+    cityTokens(card).some((token) => normalized.includes(token) || token.includes(normalized))
+  );
+}
+
 export function getMatchedLocationCard(customer: Customer, job: JobInput): LocationCard | undefined {
   const city = normalizeLocationText(job.city);
   const country = normalizeCountry(job.country);

@@ -23,6 +23,16 @@ function fromParts(year: string, month: string, day: string, hour = "0", minute 
   return new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute));
 }
 
+function parseExcelSerialDate(value: string): Date | null {
+  const raw = String(value || "").trim();
+  if (!/^\d+(\.\d+)?$/.test(raw)) return null;
+  const serial = Number(raw);
+  if (!Number.isFinite(serial) || serial < 1 || serial > 100000) return null;
+  const date = new Date(1899, 11, 30);
+  date.setDate(date.getDate() + Math.floor(serial));
+  return date;
+}
+
 export function formatDisplayDate(value: Date): string {
   const label = monthLabels[value.getMonth()] || "";
   return `${pad(value.getDate())} ${label} ${value.getFullYear()}`;
@@ -67,6 +77,9 @@ export function normalizeServiceDate(value: string): string {
 
   const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (iso) return formatDisplayDate(fromParts(iso[1], iso[2], iso[3]));
+
+  const serial = parseExcelSerialDate(raw);
+  if (serial) return formatDisplayDate(serial);
 
   return raw.toUpperCase();
 }

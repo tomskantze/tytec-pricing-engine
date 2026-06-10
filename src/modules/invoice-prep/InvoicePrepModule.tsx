@@ -1,71 +1,61 @@
-import { InboxOutlined } from '@ant-design/icons'
-import { Alert, Button, Card, Input, Space, Typography, Upload } from 'antd'
-import type { UploadProps } from 'antd'
-import { formatAmount } from '../../domain/money'
-import type { Customer, InvoiceBatch, JobReviewOverride, PricedJob } from '../../domain/types'
+import { Alert, Button, Card, Space, Typography } from 'antd'
+import { useState } from 'react'
+import type { Customer, InvoiceBatch, InvoiceSummary, JobReviewOverride, PricedJob } from '../../domain/types'
 import { PageHeader } from '../../design-system/PageHeader'
 import { CustomerIndexTable } from '../customers/CustomerIndexTable'
 import { CustomerSummary } from '../customers/CustomerSummary'
 import { InvoiceBatchTable } from './InvoiceBatchTable'
+import { InvoiceCreateModal } from './InvoiceCreateModal'
 import { InvoiceDetailPanel } from './InvoiceDetailPanel'
-import type { StoredDocumentMeta } from '../../state/localDb'
-
-function formatFileSize(size: number) {
-  if (size < 1024) return `${size} B`
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
-  return `${(size / 1024 / 1024).toFixed(1)} MB`
-}
-
-function documentLabel(kind: StoredDocumentMeta['kind']) {
-  return kind === 'customer-report' ? 'Customer Report' : 'Jira Report'
-}
+import { InvoiceSummaryTable } from './InvoiceSummaryTable'
 
 export function InvoicePrepModule({
+  activeInvoiceId,
   batches,
   customer,
   customers,
-  customerReportFileName,
-  filter,
-  jiraFileName,
+  embedded,
   includeSla,
+  invoiceLabel,
+  invoiceSummaries,
   pricedJobs,
   selectedBatch,
-  storedDocuments,
   warnings,
+  onCreateInvoice,
+  onDeleteInvoice,
   onExport,
   onExportPricedReport,
-  onImportCustomerReport,
-  onImportJiraReport,
-  onReset,
   onSaveReviewOverride,
   onSelectBatch,
   onSelectCustomer,
-  onSetFilter,
+  onSelectInvoice,
   onToggleIncludeSla,
 }: {
+  activeInvoiceId: string
   batches: InvoiceBatch[]
   customer: Customer | null
   customers: Customer[]
-  customerReportFileName: string
-  filter: string
-  jiraFileName: string
+  embedded?: boolean
   includeSla: boolean
+  invoiceLabel: string
+  invoiceSummaries: InvoiceSummary[]
   pricedJobs: PricedJob[]
   selectedBatch: string
-  storedDocuments: StoredDocumentMeta[]
   warnings: string[]
+  onCreateInvoice: (input: { customerFile: File; jiraFile: File; label: string; month: number; year: number }) => Promise<void>
+  onDeleteInvoice: () => void
   onExport: (batch: InvoiceBatch) => void
   onExportPricedReport: () => void
-  onImportCustomerReport: (file: File) => void | Promise<void>
-  onImportJiraReport: (file: File) => void | Promise<void>
-  onReset: () => void
   onSaveReviewOverride: (jobId: string, override: JobReviewOverride | null) => void
   onSelectBatch: (batch: string) => void
   onSelectCustomer: (customerKey: string) => void
-  onSetFilter: (value: string) => void
+  onSelectInvoice: (invoiceId: string) => void
   onToggleIncludeSla: () => void
 }) {
+  const [createOpen, setCreateOpen] = useState(false)
+
   if (!customer) {
+    if (embedded) return null
     return (
       <>
         <PageHeader title="Invoice Prep" />
@@ -78,97 +68,63 @@ export function InvoicePrepModule({
     )
   }
 
-  const selected = batches.find((batch) => batch.batch === selectedBatch) ?? batches[0]
-  const readyJobs = pricedJobs.filter((job) => job.queueState === 'Ready')
-  const manualJobs = pricedJobs.length - readyJobs.length
-  const readyTotal = readyJobs.reduce((sum, job) => sum + (job.totalAmount || 0), 0)
-  const metrics = [
-    { label: 'Customer Report', value: customerReportFileName || 'Not loaded' },
-    { label: 'Jira Report', value: jiraFileName || 'Not loaded' },
-    { label: 'Local Documents', value: storedDocuments.length },
-    { label: 'Auto Calculated', value: readyJobs.length },
-    { label: 'Manual Calculations', value: manualJobs },
-    { label: 'Invoice Batches', value: batches.length },
-    { label: 'SLA', value: includeSla ? 'Included' : 'Excluded' },
-    { label: 'Ready Revenue', value: formatAmount('EUR', readyTotal) },
-  ]
-
-  const customerUploadProps: UploadProps = {
-    accept: '.xlsx,.csv',
-    beforeUpload: (file) => {
-      void onImportCustomerReport(file)
-      return false
-    },
-    maxCount: 1,
-    showUploadList: false,
-  }
-  const jiraUploadProps: UploadProps = {
-    accept: '.csv',
-    beforeUpload: (file) => {
-      void onImportJiraReport(file)
-      return false
-    },
-    maxCount: 1,
-    showUploadList: false,
-  }
+  const selected = batches.find((batch) => batch.batch === selectedBatch)
+  const activeInvoice = invoiceSummaries.find((invoice) => invoice.invoiceId === activeInvoiceId) || null
 
   return (
     <>
-      <PageHeader title={customer.name} />
+      {!embedded ? <PageHeader title={`${customer.name} - Invoices${activeInvoice ? ` ${activeInvoice.label}` : ''}`} /> : null}
       <Card className="workspace-card" variant="borderless">
-        <CustomerSummary customer={customer} />
+        <CustomerSummary
+          customer={customer}
+          items={[
+            { label: 'Legal ID', value: customer.customerLegalId || '-' },
+            { label: 'Customer Key', value: customer.customerKey || '-' },
+            { label: 'On Invoice', value: activeInvoice?.jobs ?? 0 },
+            { label: 'Need Review', value: activeInvoice?.reviewCount ?? 0 },
+            { label: 'Invoice Mode', value: customer.defaultInvoiceMode === 'task' ? 'Per Task' : 'Monthly' },
+          ]}
+        />
         <div className="toolbar-row">
           <div>
-            <Typography.Text strong>Invoice Prep</Typography.Text>
+            <Typography.Text strong>Invoices</Typography.Text>
             <Typography.Text className="page-description">
-              {customerReportFileName || 'No customer report loaded'} · {jiraFileName || 'No Jira report loaded'}
+              Open an invoice period or create a new invoice from the customer report and Jira report.
             </Typography.Text>
           </div>
           <Space size={8} wrap>
-            <Button disabled={!pricedJobs.length} onClick={onExportPricedReport}>Export Priced Report</Button>
-            <Button onClick={onReset}>Clear Report</Button>
+            <Button onClick={() => setCreateOpen(true)} type="primary">Create New Invoice</Button>
+            <Button disabled={!activeInvoice} onClick={onDeleteInvoice}>Delete Invoice</Button>
           </Space>
         </div>
-        <div className="metric-strip invoice-metric-strip">
-          {metrics.map((metric) => (
-            <div className="metric-card" key={metric.label}>
-              <span>{metric.label}</span>
-              <strong>{metric.value}</strong>
-            </div>
-          ))}
-        </div>
-        <div className="pricing-upload-row pricing-upload-grid">
-          <Upload.Dragger {...customerUploadProps}>
-            <p className="ant-upload-drag-icon"><InboxOutlined /></p>
-            <p className="ant-upload-text">Upload customer report</p>
-            <p className="ant-upload-hint">{customerReportFileName || 'XLSX first sheet or CSV'}</p>
-          </Upload.Dragger>
-          <Upload.Dragger {...jiraUploadProps}>
-            <p className="ant-upload-drag-icon"><InboxOutlined /></p>
-            <p className="ant-upload-text">Upload Jira report</p>
-            <p className="ant-upload-hint">{jiraFileName || 'CSV export for the same month'}</p>
-          </Upload.Dragger>
-        </div>
-        {storedDocuments.length ? (
-          <div className="document-store-list">
-            {storedDocuments.map((document) => (
-              <div className="info-field" key={document.id}>
-                <span>{documentLabel(document.kind)}</span>
-                <strong>{document.fileName} · {formatFileSize(document.size)} · {new Date(document.uploadedAt).toLocaleString()}</strong>
-              </div>
-            ))}
-          </div>
-        ) : null}
-        {warnings.map((warning) => <Alert key={warning} message={warning} showIcon type="warning" />)}
+        <InvoiceSummaryTable invoices={invoiceSummaries} onSelectInvoice={onSelectInvoice} selectedInvoiceId={activeInvoiceId} />
       </Card>
 
-      <Card className="workspace-card" variant="borderless">
-        <div className="toolbar-row">
-          <Input className="toolbar-search" placeholder="Search batch, period, ticket, city" value={filter} onChange={(event) => onSetFilter(event.target.value)} />
-          <span className="toolbar-count">{batches.length} batches</span>
-        </div>
-        <InvoiceBatchTable batches={batches} selectedBatch={selected?.batch || ''} onSelectBatch={onSelectBatch} />
-      </Card>
+      <InvoiceCreateModal
+        existingPeriods={invoiceSummaries.map((invoice) => invoice.label)}
+        onClose={() => setCreateOpen(false)}
+        onCreateInvoice={onCreateInvoice}
+        open={createOpen}
+      />
+
+      {activeInvoice ? (
+        <Card className="workspace-card" variant="borderless">
+          <div className="toolbar-row">
+            <div>
+              <Typography.Text strong>{invoiceLabel}</Typography.Text>
+              <Typography.Text className="page-description">
+                {activeInvoice.jobs} jobs · {activeInvoice.reviewCount} need review
+              </Typography.Text>
+            </div>
+            <Space size={8} wrap>
+              <Button disabled={!pricedJobs.length} onClick={onExportPricedReport}>Export Priced Report</Button>
+            </Space>
+          </div>
+          {warnings.map((warning) => <Alert key={warning} message={warning} showIcon type="warning" />)}
+          <div className="toolbar-row"><span className="toolbar-count">{batches.length} batches</span></div>
+          <InvoiceBatchTable batches={batches} onSelectBatch={onSelectBatch} selectedBatch={selected?.batch || ''} />
+        </Card>
+      ) : null}
 
       <InvoiceDetailPanel
         batch={selected}

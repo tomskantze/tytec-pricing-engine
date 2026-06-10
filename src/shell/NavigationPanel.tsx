@@ -1,4 +1,4 @@
-import { CalculatorOutlined, CheckSquareOutlined, LeftOutlined, RightOutlined, TagsOutlined, TeamOutlined } from '@ant-design/icons'
+import { LeftOutlined, RightOutlined, TagsOutlined, TeamOutlined } from '@ant-design/icons'
 import { Button, Layout } from 'antd'
 import type { ReactNode } from 'react'
 import { useState } from 'react'
@@ -10,8 +10,6 @@ const collapsedNavWidth = 68
 const navigationItems: Array<{ key: ActiveView; label: string; icon: ReactNode }> = [
   { key: 'customers', label: 'Customers', icon: <TeamOutlined /> },
   { key: 'fortnox', label: 'Fortnox', icon: <TagsOutlined /> },
-  { key: 'invoice-prep', label: 'Invoice Prep', icon: <CalculatorOutlined /> },
-  { key: 'review-queue', label: 'Review Queue', icon: <CheckSquareOutlined /> },
 ]
 
 export function NavigationPanel({
@@ -29,7 +27,7 @@ export function NavigationPanel({
         <div className="brand-mark">T</div>
         <div className="brand-copy">
           <strong>TYTEC PRICING</strong>
-          <span>Telesol workspace</span>
+          <span>Customer workspace</span>
         </div>
         <Button
           aria-label={isCollapsed ? 'Expand navigation' : 'Collapse navigation'}

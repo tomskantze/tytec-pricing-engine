@@ -43,6 +43,12 @@ export type Customer = {
   locationCards: LocationCard[];
 };
 
+export type ReportedHours = {
+  bh: number;
+  obh: number;
+  wh: number;
+};
+
 export type JobInput = {
   id: string;
   sourceRow: number;
@@ -64,10 +70,12 @@ export type JobInput = {
   technician: string;
   summary: string;
   reportStatus: string;
+  completionNotes: string;
   travelStart: string;
   onSite: string;
   offSite: string;
   travelFinish: string;
+  reportedHours?: ReportedHours;
   consumablesAmount: number;
   consumablesDescription: string;
   raw: Record<string, string>;
@@ -83,6 +91,7 @@ export type JiraIssue = {
   location: string;
   ttrComment: string;
   customerTicket: string;
+  summaryReferences?: string[];
 };
 
 export type JobReviewOverride = {
@@ -139,18 +148,33 @@ export type SlaLine = {
 };
 
 export type InvoiceBatch = {
+  batchKind: "jobs" | "sla";
   batch: string;
   customer: string;
   businessEntity: string;
-  invoiceMode: "Monthly" | "Per Task";
+  invoiceMode: "Monthly" | "Per Task" | "Retainer";
   period: string;
   jobs: number;
   total: number | null;
+  combinedTotal: number | null;
   currency: string;
   status: QueueState | "Sent";
   slaLines: SlaLine[];
   slaTotal: number;
   items: PricedJob[];
+};
+
+export type InvoiceSummary = {
+  invoiceId: string;
+  label: string;
+  jobs: number;
+  reviewCount: number;
+  laborTotal: number;
+  slaTotal: number;
+  total: number;
+  currency: string;
+  status: QueueState | "Draft";
+  updatedAt: string;
 };
 
 export type ImportResult = {

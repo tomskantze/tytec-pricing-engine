@@ -1,13 +1,11 @@
 import { EditOutlined, LockOutlined, SearchOutlined } from '@ant-design/icons'
-import { Button, Card, Empty, Input, Modal, Space, Typography } from 'antd'
+import { Button, Card, Empty, Input, Modal, Select, Space, Typography } from 'antd'
 import { useMemo, useState } from 'react'
 import { getFortnoxArticleNumber } from '../../domain/fortnoxArticles'
 import type { FortnoxArticleMap, FortnoxLineKind } from '../../domain/fortnoxArticles'
 import { getLocationLabel } from '../../domain/matching'
 import { formatAmount } from '../../domain/money'
 import type { Customer, ShiftLabel } from '../../domain/types'
-import { PageHeader } from '../../design-system/PageHeader'
-import { CustomerIndexTable } from '../customers/CustomerIndexTable'
 import { CustomerSummary } from '../customers/CustomerSummary'
 
 type FortnoxRow = {
@@ -130,11 +128,12 @@ export function FortnoxModule({
 }) {
   const [query, setQuery] = useState('')
   const [editor, setEditor] = useState<ArticleEditor | null>(null)
+  const activeCustomer = customer ?? customers[0] ?? null
   const rows = useMemo(() => {
-    if (!customer) return []
+    if (!activeCustomer) return []
     const needle = query.trim().toLowerCase()
-    return getRows(customer).filter((row) => rowMatches(row, fortnoxArticles, needle))
-  }, [customer, fortnoxArticles, query])
+    return getRows(activeCustomer).filter((row) => rowMatches(row, fortnoxArticles, needle))
+  }, [activeCustomer, fortnoxArticles, query])
   const groups = useMemo(() => getGroups(rows), [rows])
   const mappedArticles = mappedCount(rows, fortnoxArticles)
   const totalArticles = articleTargetCount(rows)
@@ -151,24 +150,23 @@ export function FortnoxModule({
     setEditor(null)
   }
 
-  if (!customer) {
-    return (
-      <>
-        <PageHeader title="Fortnox" />
-        <CustomerIndexTable
-          customers={customers}
-          emptyText="No customers are available for Fortnox article mapping."
-          onOpenCustomer={onSelectCustomer}
-        />
-      </>
-    )
-  }
-
   return (
     <>
-      <PageHeader title="Fortnox" description={customer.name} />
+      <div className="customer-workspace-topbar global-workspace-topbar">
+        <div className="global-workspace-spacer" />
+        <div className="customer-workspace-meta">
+          <Select
+            className="global-workspace-select"
+            onChange={onSelectCustomer}
+            options={customers.map((item) => ({ label: item.name, value: item.customerKey }))}
+            placeholder="Select customer"
+            size="small"
+            value={activeCustomer?.customerKey}
+          />
+        </div>
+      </div>
       <Card className="workspace-card" variant="borderless">
-        <CustomerSummary customer={customer} />
+        {activeCustomer ? <CustomerSummary customer={activeCustomer} /> : null}
         <div className="toolbar-row">
           <div>
             <Typography.Text strong>Article Mapping</Typography.Text>

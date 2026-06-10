@@ -6,50 +6,36 @@ import type { FortnoxLineKind } from './domain/fortnoxArticles'
 import type { Customer, InvoiceBatch, JobReviewOverride, ShiftLabel } from './domain/types'
 import { AppProviders } from './design-system/AppProviders'
 import { hydrateState, loadState, saveState, type ActiveView, type AppState } from './state/appState'
+import { loadDbState, saveDbState, saveUploadedDocument } from './state/localDb'
 import {
-  clearUploadedDocuments,
-  listUploadedDocuments,
-  loadDbState,
-  saveDbState,
-  saveUploadedDocument,
-  type StoredDocumentMeta,
-} from './state/localDb'
+  createRunForCustomer,
+  deleteActiveImportRun,
+  getActiveImportRun,
+  getCustomerImportRuns,
+  saveRunReviewOverride,
+  selectImportRun,
+  setCustomerReportOnRun,
+  setJiraReportOnRun,
+  setRunSelectedBatch,
+} from './state/importRuns'
 import { ErpShell } from './shell/ErpShell'
+import { CustomerWorkspaceModule } from './modules/customers/CustomerWorkspaceModule'
 import { CustomersModule } from './modules/customers/CustomersModule'
 import { FortnoxModule } from './modules/fortnox/FortnoxModule'
 import { InvoicePrepModule } from './modules/invoice-prep/InvoicePrepModule'
 import { ReviewQueueModule } from './modules/review-queue/ReviewQueueModule'
-import { importJiraIssuesFromText, mergeJobsWithJira } from './import/jiraReport'
+import { importJiraIssuesFromText } from './import/jiraReport'
 import { pricedCustomerReportToXlsx } from './import/pricedReportExport'
-import { importCustomerReportFile } from './import/telesolReport'
+import { importCustomerReportFile } from './import/customerReport'
+import { buildInvoiceSummary } from './modules/invoice-prep/invoiceSummary'
 import { downloadBlob, downloadText } from './shared/download'
-
-function batchMatches(batch: InvoiceBatch, query: string): boolean {
-  if (!query) return true
-  const haystack = [
-    batch.batch,
-    batch.customer,
-    batch.businessEntity,
-    batch.invoiceMode,
-    batch.period,
-    ...batch.items.flatMap((job) => [job.ticket, job.jiraIssueKey, job.jiraSummary, job.city, job.country, job.customerRef]),
-  ]
-    .join(' ')
-    .toLowerCase()
-  return haystack.includes(query)
-}
 
 export function App() {
   const [state, setState] = useState<AppState>(() => loadState())
-  const [storedDocuments, setStoredDocuments] = useState<StoredDocumentMeta[]>([])
-
-  async function refreshStoredDocuments() {
-    setStoredDocuments(await listUploadedDocuments())
-  }
 
   useEffect(() => {
     let isMounted = true
-    void Promise.all([loadDbState(), listUploadedDocuments()]).then(([dbState, documents]) => {
+    void loadDbState().then((dbState) => {
       if (!isMounted) return
       if (dbState) {
         const hydratedState = hydrateState(dbState)
@@ -57,7 +43,6 @@ export function App() {
         saveState(hydratedState)
         void saveDbState(hydratedState)
       }
-      setStoredDocuments(documents)
     })
     return () => {
       isMounted = false
@@ -73,112 +58,89 @@ export function App() {
     })
   }
 
+  const selectedCustomer = useMemo(
+    () => state.customers.find((customer) => customer.customerKey === state.selectedCustomerKey) ?? null,
+    [state.customers, state.selectedCustomerKey],
+  )
   const invoiceCustomer = useMemo(
     () => state.customers.find((customer) => customer.customerKey === state.selectedInvoiceCustomerKey) ?? null,
     [state.customers, state.selectedInvoiceCustomerKey],
   )
+  const fortnoxCustomer = useMemo(
+    () => state.customers.find((customer) => customer.customerKey === state.selectedFortnoxCustomerKey) ?? null,
+    [state.customers, state.selectedFortnoxCustomerKey],
+  )
+  const activeRun = useMemo(() => getActiveImportRun(state), [state])
+  const customerImportRuns = useMemo(
+    () => (invoiceCustomer ? getCustomerImportRuns(state, invoiceCustomer.customerKey) : []),
+    [invoiceCustomer, state],
+  )
+  const invoiceSummaries = useMemo(
+    () => (invoiceCustomer ? customerImportRuns.map((invoice) => buildInvoiceSummary(invoiceCustomer, invoice, state.fortnoxArticles)) : []),
+    [customerImportRuns, invoiceCustomer, state.fortnoxArticles],
+  )
   const pricedJobs = useMemo(
-    () => (invoiceCustomer ? priceJobs(invoiceCustomer, state.jobs, state.jobReviewOverrides, state.fortnoxArticles) : []),
-    [invoiceCustomer, state.jobs, state.jobReviewOverrides, state.fortnoxArticles],
+    () => (
+      invoiceCustomer && activeRun
+        ? priceJobs(invoiceCustomer, activeRun.jobs, activeRun.jobReviewOverrides, state.fortnoxArticles)
+        : []
+    ),
+    [invoiceCustomer, activeRun, state.fortnoxArticles],
   )
   const batches = useMemo(() => {
     if (!invoiceCustomer) return []
-    const query = state.filter.trim().toLowerCase()
-    return buildInvoiceBatches(invoiceCustomer, pricedJobs, state.includeSla).filter((batch) => batchMatches(batch, query))
-  }, [pricedJobs, invoiceCustomer, state.filter, state.includeSla])
+    return buildInvoiceBatches(invoiceCustomer, pricedJobs, state.includeSla)
+  }, [pricedJobs, invoiceCustomer, state.includeSla])
 
   function navigate(activeView: ActiveView) {
-    updateState((current) =>
+    updateState((current) => (
       activeView === 'customers'
         ? { ...current, activeView, selectedCustomerKey: '' }
-        : { ...current, activeView, selectedInvoiceCustomerKey: '' },
-    )
+        : { ...current, activeView }
+    ))
   }
 
-  function resetReport() {
-    updateState({
-      customerJobs: [],
-      jiraIssues: [],
-      customerReportHeaders: [],
-      customerReportFileName: '',
-      customerReportSheetName: '',
-      jiraFileName: '',
-      jobs: [],
-      jobReviewOverrides: {},
-      fileName: '',
-      warnings: [],
-      selectedBatch: '',
-      filter: '',
-    })
-    void clearUploadedDocuments().then(refreshStoredDocuments)
+  function openCustomerWorkspace(customerKey: string) {
+    updateState((current) => ({
+      ...current,
+      activeView: 'customers',
+      customerWorkspaceTab: 'overview',
+      activeImportRunId: '',
+      selectedCustomerKey: customerKey,
+      selectedInvoiceCustomerKey: customerKey,
+    }))
   }
 
   function exportBatch(batch: InvoiceBatch) {
     downloadText(`${batch.batch}.csv`, 'text/csv;charset=utf-8', invoiceBatchToCsv(batch, state.includeSla))
   }
 
-  function mergeImportState(current: AppState, next: Partial<AppState>, warnings: string[]) {
-    const customerJobs = next.customerJobs ?? current.customerJobs
-    const jiraIssues = next.jiraIssues ?? current.jiraIssues
-    const merged = mergeJobsWithJira(customerJobs, jiraIssues)
-    return {
-      ...current,
-      ...next,
-      customerJobs,
-      jiraIssues,
-      jobs: merged.jobs,
-      warnings: [...warnings, ...merged.warnings],
-      selectedBatch: '',
-      activeView: 'invoice-prep' as const,
-    }
-  }
-
-  async function importCustomerReport(file: File) {
-    const result = await importCustomerReportFile(file)
-    await saveUploadedDocument('customer-report', file)
-    await refreshStoredDocuments()
-    updateState((current) =>
-      mergeImportState(
-        current,
-        {
-          customerJobs: result.jobs,
-          jobReviewOverrides: {},
-          customerReportHeaders: result.headers ?? [],
-          customerReportFileName: file.name,
-          customerReportSheetName: result.sheetName ?? '',
-          fileName: file.name,
-        },
-        result.warnings,
-      ),
+  function exportPricedReport() {
+    if (!activeRun) return
+    const baseName = activeRun.customerReportFileName.replace(/\.[^.]+$/, '') || 'customer-report'
+    downloadBlob(
+      `${baseName}-priced.xlsx`,
+      pricedCustomerReportToXlsx(pricedJobs, activeRun.customerReportHeaders, activeRun.customerReportSheetName),
     )
   }
 
-  async function importJiraReport(file: File) {
-    const result = importJiraIssuesFromText(await file.text())
-    await saveUploadedDocument('jira-report', file)
-    await refreshStoredDocuments()
-    updateState((current) => mergeImportState(current, { jiraIssues: result.issues, jiraFileName: file.name }, result.warnings))
-  }
-
-  function exportPricedReport() {
-    const baseName = state.customerReportFileName.replace(/\.[^.]+$/, '') || 'customer-report'
-    downloadBlob(`${baseName}-priced.xlsx`, pricedCustomerReportToXlsx(pricedJobs, state.customerReportHeaders, state.customerReportSheetName))
-  }
-
   function saveReviewOverride(jobId: string, override: JobReviewOverride | null) {
+    updateState((current) => saveRunReviewOverride(current, jobId, override))
+  }
+
+  async function createInvoice(input: { customerFile: File; jiraFile: File; label: string; month: number; year: number }) {
+    if (!invoiceCustomer) return
+    const customerResult = await importCustomerReportFile(invoiceCustomer, input.customerFile)
+    const jiraResult = importJiraIssuesFromText(await input.jiraFile.text())
+    await Promise.all([
+      saveUploadedDocument('customer-report', input.customerFile),
+      saveUploadedDocument('jira-report', input.jiraFile),
+    ])
     updateState((current) => {
-      const nextOverrides = { ...current.jobReviewOverrides }
-      const hasAmounts = override && [
-        override.manualLaborAmount,
-        override.manualTravelAmount,
-        override.manualConsumablesAmount,
-        override.manualFinalAmount,
-      ].some((value) => value != null)
-      if (override && (override.approved || override.forceReview || override.treatAsLocationId || hasAmounts || override.note)) {
-        nextOverrides[jobId] = override
-      }
-      else delete nextOverrides[jobId]
-      return { ...current, jobReviewOverrides: nextOverrides }
+      let next = createRunForCustomer(current, invoiceCustomer.customerKey, input.label, input.month, input.year)
+      next = setCustomerReportOnRun(next, invoiceCustomer.customerKey, customerResult, input.customerFile)
+      next = setJiraReportOnRun(next, invoiceCustomer.customerKey, jiraResult, input.jiraFile)
+      return next
     })
   }
 
@@ -189,9 +151,18 @@ export function App() {
       const customers = exists
         ? current.customers.map((currentCustomer) => (currentCustomer.customerKey === lookupKey ? customer : currentCustomer))
         : [customer, ...current.customers]
+      const selectedFortnoxCustomerKey =
+        current.selectedFortnoxCustomerKey === lookupKey ? customer.customerKey : current.selectedFortnoxCustomerKey
       const selectedInvoiceCustomerKey =
         current.selectedInvoiceCustomerKey === lookupKey ? customer.customerKey : current.selectedInvoiceCustomerKey
-      return { ...current, customers, selectedCustomerKey: customer.customerKey, selectedInvoiceCustomerKey, activeView: 'customers' }
+      return {
+        ...current,
+        customers,
+        selectedCustomerKey: customer.customerKey,
+        selectedInvoiceCustomerKey,
+        selectedFortnoxCustomerKey,
+        activeView: 'customers',
+      }
     })
   }
 
@@ -205,53 +176,88 @@ export function App() {
   return (
     <AppProviders>
       <ErpShell activeView={state.activeView} onNavigate={navigate}>
-        {state.activeView === 'customers' ? (
+        {state.activeView === 'fortnox' ? (
+          <FortnoxModule
+            customer={fortnoxCustomer}
+            customers={state.customers}
+            fortnoxArticles={state.fortnoxArticles}
+            onSelectCustomer={(selectedFortnoxCustomerKey) => updateState({ selectedFortnoxCustomerKey })}
+            onSetArticle={saveFortnoxArticle}
+          />
+        ) : !selectedCustomer ? (
           <CustomersModule
             customers={state.customers}
             fortnoxArticles={state.fortnoxArticles}
             onCustomerChange={saveCustomer}
-            onSelectCustomer={(selectedCustomerKey) => updateState({ selectedCustomerKey })}
-            selectedCustomerKey={state.selectedCustomerKey}
-          />
-        ) : state.activeView === 'fortnox' ? (
-          <FortnoxModule
-            customer={invoiceCustomer}
-            customers={state.customers}
-            fortnoxArticles={state.fortnoxArticles}
-            onSelectCustomer={(selectedInvoiceCustomerKey) => updateState({ selectedInvoiceCustomerKey })}
-            onSetArticle={saveFortnoxArticle}
-          />
-        ) : state.activeView === 'review-queue' ? (
-          <ReviewQueueModule
-            customer={invoiceCustomer}
-            customers={state.customers}
-            onSaveReviewOverride={saveReviewOverride}
-            onSelectCustomer={(selectedInvoiceCustomerKey) => updateState({ selectedInvoiceCustomerKey })}
-            pricedJobs={pricedJobs}
+            onSelectCustomer={openCustomerWorkspace}
+            selectedCustomerKey=""
           />
         ) : (
-          <InvoicePrepModule
-            batches={batches}
-            customer={invoiceCustomer}
-            customers={state.customers}
-            customerReportFileName={state.customerReportFileName}
-            filter={state.filter}
-            jiraFileName={state.jiraFileName}
-            onExport={exportBatch}
-            onExportPricedReport={exportPricedReport}
-            onImportCustomerReport={importCustomerReport}
-            onImportJiraReport={importJiraReport}
-            onReset={resetReport}
-            includeSla={state.includeSla}
-            onSaveReviewOverride={saveReviewOverride}
-            onSelectBatch={(selectedBatch) => updateState({ selectedBatch })}
-            onSelectCustomer={(selectedInvoiceCustomerKey) => updateState({ selectedInvoiceCustomerKey })}
-            onToggleIncludeSla={() => updateState((current) => ({ ...current, includeSla: !current.includeSla }))}
-            onSetFilter={(filter) => updateState({ filter, selectedBatch: '' })}
-            pricedJobs={pricedJobs}
-            selectedBatch={state.selectedBatch}
-            storedDocuments={storedDocuments}
-            warnings={state.warnings}
+          <CustomerWorkspaceModule
+            activeInvoiceLabel={state.customerWorkspaceTab === 'invoices' ? activeRun?.label || '' : ''}
+            activeTab={state.customerWorkspaceTab}
+            customer={selectedCustomer}
+            invoicesContent={(
+              <InvoicePrepModule
+                activeInvoiceId={activeRun?.id || ''}
+                batches={batches}
+                customer={selectedCustomer}
+                customers={state.customers}
+                embedded
+                invoiceSummaries={invoiceSummaries}
+                invoiceLabel={activeRun?.label || ''}
+                onExport={exportBatch}
+                onExportPricedReport={exportPricedReport}
+                onCreateInvoice={createInvoice}
+                onDeleteInvoice={() => updateState((current) => deleteActiveImportRun(current))}
+                includeSla={state.includeSla}
+                onSaveReviewOverride={saveReviewOverride}
+                onSelectBatch={(selectedBatch) => updateState((current) => setRunSelectedBatch(current, selectedBatch))}
+                onSelectCustomer={openCustomerWorkspace}
+                onSelectInvoice={(invoiceId) => updateState((current) => (
+                  invoiceId
+                    ? selectImportRun(current, invoiceId)
+                    : { ...current, activeImportRunId: '' }
+                ))}
+                onToggleIncludeSla={() => updateState((current) => ({ ...current, includeSla: !current.includeSla }))}
+                pricedJobs={pricedJobs}
+                selectedBatch={activeRun?.selectedBatch || ''}
+                warnings={activeRun?.warnings || []}
+              />
+            )}
+            onBackToCustomers={() => updateState((current) => ({
+              ...current,
+              activeView: 'customers',
+              activeImportRunId: '',
+              selectedCustomerKey: '',
+              selectedInvoiceCustomerKey: '',
+            }))}
+            onSelectTab={(customerWorkspaceTab) => updateState((current) => ({
+              ...current,
+              activeImportRunId: customerWorkspaceTab === 'invoices' ? '' : current.activeImportRunId,
+              customerWorkspaceTab,
+              selectedInvoiceCustomerKey: selectedCustomer.customerKey,
+            }))}
+            overviewContent={(
+              <CustomersModule
+                customers={state.customers}
+                embedded
+                fortnoxArticles={state.fortnoxArticles}
+                onCustomerChange={saveCustomer}
+                onSelectCustomer={openCustomerWorkspace}
+                selectedCustomerKey={selectedCustomer.customerKey}
+              />
+            )}
+            reviewQueueContent={(
+              <ReviewQueueModule
+                customer={selectedCustomer}
+                customers={state.customers}
+                embedded
+                onSaveReviewOverride={saveReviewOverride}
+                onSelectCustomer={openCustomerWorkspace}
+                pricedJobs={pricedJobs}
+              />
+            )}
           />
         )}
       </ErpShell>

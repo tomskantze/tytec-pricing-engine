@@ -1,6 +1,7 @@
 const { app, BrowserWindow, net, protocol } = require("electron");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
+const isWindows = process.platform === "win32";
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -29,15 +30,19 @@ function createWindow() {
     height: 860,
     minWidth: 1080,
     minHeight: 720,
+    show: false,
     title: "Tytec Pricing Engine",
+    titleBarStyle: isWindows ? "hidden" : "default",
+    titleBarOverlay: isWindows ? { color: "#151922", symbolColor: "#ffffff", height: 38 } : undefined,
     autoHideMenuBar: true,
-    backgroundColor: "#f4f3f1",
+    backgroundColor: isWindows ? "#151922" : "#f4f3f1",
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
     },
   });
+  win.once("ready-to-show", () => win.show());
 
   const devUrl = process.env.ELECTRON_START_URL;
   if (devUrl) {

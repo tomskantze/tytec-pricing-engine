@@ -7,6 +7,21 @@
   margin-bottom: 2px;
 }
 
+.page-header-copy {
+  min-width: 0;
+}
+
+.page-header-eyebrow {
+  display: block;
+  margin-bottom: 3px;
+  color: #65778a;
+  font-size: 9px;
+  font-weight: 640;
+  letter-spacing: 0.065em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
 .page-header h1.ant-typography {
   margin: 0;
   color: var(--erp-text);
@@ -123,6 +138,18 @@
 
 .toolbar-search {
   width: min(470px, 100%);
+}
+
+.run-control-row {
+  margin-top: 8px;
+}
+
+.run-select {
+  width: min(380px, 100%);
+}
+
+.run-name-input {
+  width: min(260px, 100%);
 }
 
 .toolbar-count {

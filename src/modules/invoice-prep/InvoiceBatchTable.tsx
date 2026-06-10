@@ -11,19 +11,19 @@ function statusTone(status: InvoiceBatch['status']): StatusTone {
 }
 
 const columns: ErpTableColumn<InvoiceBatch>[] = [
-  { title: 'Batch', dataIndex: 'batch', erpSize: 'compact' },
-  { title: 'Invoice Entity', dataIndex: 'customer', erpSize: 'text' },
-  { title: 'Mode', dataIndex: 'invoiceMode', erpSize: 'compact' },
-  { title: 'Period', dataIndex: 'period', erpSize: 'date' },
-  { title: 'Jobs', dataIndex: 'jobs', erpSize: 'money' },
+  { title: 'Batch', dataIndex: 'batch', width: 300 },
+  { title: 'Invoice Entity', dataIndex: 'customer', width: 260 },
+  { title: 'Mode', dataIndex: 'invoiceMode', width: 110 },
+  { title: 'Period', dataIndex: 'period', width: 110 },
+  { title: 'Jobs', dataIndex: 'jobs', width: 80 },
   {
     title: 'Total',
-    erpSize: 'money',
+    width: 120,
     render: (_, batch) => formatJobTotal(batch.currency, batch.total),
   },
   {
     title: 'Status',
-    erpSize: 'status',
+    width: 105,
     render: (_, batch) => <StatusBadge label={batch.status} tone={statusTone(batch.status)} />,
   },
 ]
@@ -39,12 +39,14 @@ export function InvoiceBatchTable({
 }) {
   return (
     <ErpDataTable<InvoiceBatch>
+      columnSizing="manual"
       columns={columns}
       dataSource={batches}
       locale={{ emptyText: 'Upload a customer report and Jira report to calculate invoice batches.' }}
       onRow={(batch) => ({ onClick: () => onSelectBatch(batch.batch) })}
       rowClassName={(batch) => (batch.batch === selectedBatch ? 'selected-row' : '')}
       rowKey="batch"
+      scroll={{ x: 1085 }}
     />
   )
 }

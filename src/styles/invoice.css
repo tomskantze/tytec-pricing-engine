@@ -4,6 +4,43 @@
   min-width: 0;
 }
 
+.invoice-create-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.invoice-create-field {
+  border: 1px solid var(--erp-border-soft);
+  border-radius: 7px;
+  background: var(--erp-surface-soft);
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+
+.invoice-create-period strong {
+  color: var(--erp-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.invoice-upload-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.invoice-create-year {
+  width: 100%;
+}
+
+.invoice-create-field .page-description {
+  margin: 4px 0 0;
+}
+
 .invoice-detail-meta-items {
   display: flex;
   flex-wrap: wrap;
@@ -38,10 +75,27 @@
 
 .invoice-total-row td {
   background: var(--erp-surface);
+  white-space: nowrap;
+}
+
+.invoice-total-row td strong {
+  font-size: 13px;
+  font-weight: 760;
+}
+
+.invoice-total-value {
+  display: inline-block;
+  white-space: nowrap;
 }
 
 .invoice-job-table .ant-table-tbody > tr:hover > td {
   cursor: pointer;
+}
+
+.invoice-job-table .ant-table-thead > tr > th,
+.invoice-job-table .ant-table-tbody > tr > td {
+  padding-left: 7px;
+  padding-right: 7px;
 }
 
 .invoice-manual-panel {
@@ -59,4 +113,10 @@
 
 .invoice-manual-head .page-description {
   margin: 2px 0 0;
+}
+
+@media (max-width: 900px) {
+  .invoice-create-grid {
+    grid-template-columns: 1fr;
+  }
 }

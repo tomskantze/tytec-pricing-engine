@@ -11,12 +11,14 @@ import { isPendingReviewJob, ReviewJobList } from './ReviewJobList'
 export function ReviewQueueModule({
   customer,
   customers,
+  embedded,
   pricedJobs,
   onSelectCustomer,
   onSaveReviewOverride,
 }: {
   customer: Customer | null
   customers: Customer[]
+  embedded?: boolean
   pricedJobs: PricedJob[]
   onSelectCustomer: (customerKey: string) => void
   onSaveReviewOverride: (jobId: string, override: JobReviewOverride | null) => void
@@ -34,6 +36,7 @@ export function ReviewQueueModule({
   }, [selectedJob, selectedJobId])
 
   if (!customer) {
+    if (embedded) return null
     return (
       <>
         <PageHeader title="Review Queue" />
@@ -60,7 +63,7 @@ export function ReviewQueueModule({
 
   return (
     <>
-      <PageHeader title="Review Queue" description={customer.name} />
+      {!embedded ? <PageHeader title="Review Queue" description={customer.name} /> : null}
       <Card className="workspace-card" variant="borderless">
         <CustomerSummary customer={customer} />
         <div className="metric-strip invoice-metric-strip">

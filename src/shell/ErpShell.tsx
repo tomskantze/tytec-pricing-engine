@@ -6,7 +6,7 @@ import { NavigationPanel } from './NavigationPanel'
 const { Content } = Layout
 
 export function ErpShell({
-  activeView,
+  activeView: _activeView,
   onNavigate,
   children,
 }: {
@@ -16,7 +16,7 @@ export function ErpShell({
 }) {
   return (
     <Layout className="erp-v2-shell">
-      <NavigationPanel activeView={activeView} onNavigate={onNavigate} />
+      <NavigationPanel activeView={_activeView} onNavigate={onNavigate} />
       <Layout className="erp-main-layout">
         <Content className="erp-main-content">{children}</Content>
       </Layout>

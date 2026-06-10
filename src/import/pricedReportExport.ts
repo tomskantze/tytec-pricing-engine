@@ -1,3 +1,4 @@
+import { normalizeServiceDate } from '../domain/dates'
 import type { PricedJob } from '../domain/types'
 
 type Sheet = { name: string; rows: string[][] }
@@ -123,10 +124,18 @@ function amount(value: number | null | undefined) {
   return value == null ? '' : value.toFixed(2)
 }
 
+function sourceValue(job: PricedJob, header: string) {
+  const value = job.raw[header] ?? ''
+  const key = header.trim().toLowerCase()
+  if (key === 'date') return job.date || normalizeServiceDate(value)
+  if (key.includes('date')) return value ? normalizeServiceDate(value) : ''
+  return value
+}
+
 function reportRows(jobs: PricedJob[], sourceHeaders: string[]) {
   const headers = [...sourceHeaders, 'Amount', 'Tytec Ticket']
   const rows = jobs.slice().sort((left, right) => left.sourceRow - right.sourceRow).map((job) => [
-    ...sourceHeaders.map((header) => job.raw[header] ?? ''),
+    ...sourceHeaders.map((header) => sourceValue(job, header)),
     amount(job.totalAmount),
     job.jiraIssueKey ?? '',
   ])

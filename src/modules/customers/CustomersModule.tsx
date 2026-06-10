@@ -12,12 +12,14 @@ import { RateCardsTable } from './RateCardsTable'
 
 export function CustomersModule({
   customers,
+  embedded,
   fortnoxArticles,
   selectedCustomerKey,
   onCustomerChange,
   onSelectCustomer,
 }: {
   customers: Customer[]
+  embedded?: boolean
   fortnoxArticles: FortnoxArticleMap
   selectedCustomerKey: string
   onCustomerChange: (customer: Customer, previousKey?: string) => void
@@ -74,9 +76,15 @@ export function CustomersModule({
   )
 
   if (!customer) {
+    if (embedded) return null
     return (
       <>
-        <PageHeader title="Customers" actions={<Button type="primary" onClick={() => setCustomerDrawerMode('add')}>Add Customer</Button>} />
+        <div className="customer-workspace-topbar global-workspace-topbar">
+          <div className="global-workspace-spacer" />
+          <Space size={8} wrap>
+            <Button type="primary" onClick={() => setCustomerDrawerMode('add')}>Add Customer</Button>
+          </Space>
+        </div>
         <CustomerIndexTable customers={customers} emptyText="No customers match the current search." onOpenCustomer={onSelectCustomer} />
         {customerDrawer}
       </>
@@ -85,14 +93,17 @@ export function CustomersModule({
 
   return (
     <>
-      <PageHeader
-        title={customer.name}
-        actions={<Button icon={<EditOutlined />} onClick={() => setCustomerDrawerMode('edit')}>Edit Customer</Button>}
-      />
+      {!embedded ? (
+        <PageHeader
+          title={customer.name}
+          actions={<Button icon={<EditOutlined />} onClick={() => setCustomerDrawerMode('edit')}>Edit Customer</Button>}
+        />
+      ) : null}
       <Card className="workspace-card" variant="borderless">
         <CustomerSummary customer={customer} />
         <div className="toolbar-row">
           <Space size={8} wrap>
+            {embedded ? <Button icon={<EditOutlined />} onClick={() => setCustomerDrawerMode('edit')}>Edit Customer</Button> : null}
             <Button icon={<PlusOutlined />} type="primary" onClick={() => setLocationDrawerMode('add')}>Add Location</Button>
             <Button disabled={!selectedLocation} onClick={() => setLocationDrawerMode('edit')}>Edit Location</Button>
             <Button disabled={!allLocationKeys.length} onClick={() => setExpandedLocationKeys(allExpanded ? [] : allLocationKeys)}>

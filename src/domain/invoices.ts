@@ -43,13 +43,14 @@ function entityToken(value: string) {
   return value.toUpperCase().replace(/[^A-Z0-9]+/g, "");
 }
 
-export function buildInvoiceBatches(customer: Customer, jobs: PricedJob[], includeSla: boolean): InvoiceBatch[] {
+export function buildInvoiceBatches(customer: Customer, jobs: PricedJob[], _includeSla: boolean): InvoiceBatch[] {
   const rows: InvoiceBatch[] = [];
   const taskJobs = jobs.filter((job) => job.invoiceMode === "task");
   const monthlyJobs = jobs.filter((job) => job.invoiceMode !== "task");
 
   taskJobs.forEach((job) => {
     rows.push({
+      batchKind: "jobs",
       batch: `JOB-${job.ticket || job.id}`,
       customer: entityLabel(job, customer),
       businessEntity: entityLabel(job, customer),
@@ -57,6 +58,7 @@ export function buildInvoiceBatches(customer: Customer, jobs: PricedJob[], inclu
       period: job.date,
       jobs: 1,
       total: job.totalAmount,
+      combinedTotal: job.totalAmount,
       currency: job.currency,
       status: invoiceStatus([job]),
       slaLines: [],
@@ -77,25 +79,51 @@ export function buildInvoiceBatches(customer: Customer, jobs: PricedJob[], inclu
     const [businessEntity, period] = key.split("||");
     const slaLines = getSlaLines(customer, businessEntity);
     const slaTotal = slaLines.reduce((sum, line) => sum + line.amount, 0);
-    const includedSlaTotal = includeSla ? slaTotal : 0;
     const currency = periodJobs[0]?.currency || slaLines[0]?.currency || "EUR";
+    const jobTotal = batchTotal(periodJobs, 0);
+    const combinedTotal = batchTotal(periodJobs, slaTotal);
     rows.push({
+      batchKind: "jobs",
       batch: `INV-${customer.customerKey}-${entityToken(businessEntity)}-${period.replace(/\s+/g, "")}`,
       customer: businessEntity,
       businessEntity,
       invoiceMode: "Monthly",
       period,
       jobs: periodJobs.length,
-      total: batchTotal(periodJobs, includedSlaTotal),
+      total: jobTotal,
+      combinedTotal,
       currency,
       status: invoiceStatus(periodJobs),
       slaLines,
-      slaTotal: includedSlaTotal,
+      slaTotal,
       items: periodJobs,
     });
+    if (slaLines.length) {
+      rows.push({
+        batchKind: "sla",
+        batch: `SLA-${customer.customerKey}-${entityToken(businessEntity)}-${period.replace(/\s+/g, "")}`,
+        customer: businessEntity,
+        businessEntity,
+        invoiceMode: "Retainer",
+        period,
+        jobs: slaLines.length,
+        total: slaTotal,
+        combinedTotal: slaTotal,
+        currency,
+        status: "Ready",
+        slaLines,
+        slaTotal,
+        items: [],
+      });
+    }
   });
 
-  return rows.sort((left, right) => left.period.localeCompare(right.period));
+  return rows.sort((left, right) => {
+    const periodSort = left.period.localeCompare(right.period);
+    if (periodSort) return periodSort;
+    if (left.batchKind !== right.batchKind) return left.batchKind === "jobs" ? -1 : 1;
+    return left.batch.localeCompare(right.batch);
+  });
 }
 
 function csvEscape(value: unknown): string {
@@ -103,44 +131,53 @@ function csvEscape(value: unknown): string {
   return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, "\"\"")}"` : text;
 }
 
-export function invoiceBatchToCsv(batch: InvoiceBatch, includeSla = true): string {
+export function invoiceBatchToCsv(batch: InvoiceBatch, _includeSla = true): string {
   const header = ["Tytec Ticket", "Fortnox Articles", "Jira Summary", "Date", "Customer Ticket", "Consumables", "City", "Call-Out Fee", "BH", "BH Amount", "OBH", "OBH Amount", "WH", "WH Amount", "Final"];
   const lines = [header.map(csvEscape).join(",")];
   const articleIndex = header.indexOf("Fortnox Articles");
   const summaryIndex = header.indexOf("Jira Summary");
   const finalIndex = header.indexOf("Final");
 
-  batch.items.forEach((job) => {
-    const breakdown = job.pricing;
-    const hasManualLabor = job.reviewOverride?.manualFinalAmount != null || job.reviewOverride?.manualLaborAmount != null;
-    const row = [
-      job.jiraIssueKey,
-      formatFortnoxArticleNumbers(breakdown?.lineItems, ""),
-      job.jiraSummary || job.summary,
-      job.date,
-      job.ticket,
-      formatOptionalAmount(job.currency, job.consumablesAmount),
-      job.city || "-",
-      hasManualLabor ? "-" : breakdown?.crossedShift ? "Split Shift" : formatOptionalAmount(job.currency, breakdown?.callOutFee || 0),
-      hasManualLabor ? "-" : formatHours(breakdown?.hours.bh || 0),
-      hasManualLabor ? "-" : formatOptionalAmount(job.currency, breakdown?.bhAmount || 0),
-      hasManualLabor ? "-" : formatHours(breakdown?.hours.obh || 0),
-      hasManualLabor ? "-" : formatOptionalAmount(job.currency, breakdown?.obhAmount || 0),
-      hasManualLabor ? "-" : formatHours(breakdown?.hours.wh || 0),
-      hasManualLabor ? "-" : formatOptionalAmount(job.currency, breakdown?.whAmount || 0),
-      formatJobTotal(job.currency, job.totalAmount),
-    ];
-    lines.push(row.map(csvEscape).join(","));
-  });
+  if (batch.batchKind === "jobs") {
+    batch.items.forEach((job) => {
+      const breakdown = job.pricing;
+      const hasManualLabor = job.reviewOverride?.manualFinalAmount != null || job.reviewOverride?.manualLaborAmount != null;
+      const row = [
+        job.jiraIssueKey,
+        formatFortnoxArticleNumbers(breakdown?.lineItems, ""),
+        job.jiraSummary || job.summary,
+        job.date,
+        job.ticket,
+        formatOptionalAmount(job.currency, job.consumablesAmount),
+        job.city || "-",
+        hasManualLabor ? "-" : breakdown?.crossedShift ? "Split Shift" : formatOptionalAmount(job.currency, breakdown?.callOutFee || 0),
+        hasManualLabor ? "-" : formatHours(breakdown?.hours.bh || 0),
+        hasManualLabor ? "-" : formatOptionalAmount(job.currency, breakdown?.bhAmount || 0),
+        hasManualLabor ? "-" : formatHours(breakdown?.hours.obh || 0),
+        hasManualLabor ? "-" : formatOptionalAmount(job.currency, breakdown?.obhAmount || 0),
+        hasManualLabor ? "-" : formatHours(breakdown?.hours.wh || 0),
+        hasManualLabor ? "-" : formatOptionalAmount(job.currency, breakdown?.whAmount || 0),
+        formatJobTotal(job.currency, job.totalAmount),
+      ];
+      lines.push(row.map(csvEscape).join(","));
+    });
+  } else {
+    batch.slaLines.forEach((line) => {
+      const row = Array(header.length).fill("");
+      row[articleIndex] = line.articleNumber || "";
+      row[summaryIndex] = line.label;
+      row[finalIndex] = formatAmount(line.currency, line.amount);
+      lines.push(row.map(csvEscape).join(","));
+    });
+  }
 
-  batch.slaLines.forEach((line) => {
-    const label = includeSla ? line.label : `${line.label} (excluded)`;
-    const row = Array(header.length).fill("");
-    row[articleIndex] = line.articleNumber || "";
-    row[summaryIndex] = label;
-    row[finalIndex] = formatAmount(line.currency, line.amount);
-    lines.push(row.map(csvEscape).join(","));
-  });
+  if (batch.batchKind === "sla") {
+    const totalRow = Array(header.length).fill("");
+    totalRow[summaryIndex] = "Total";
+    totalRow[finalIndex] = formatJobTotal(batch.currency, batch.total);
+    lines.push(totalRow.map(csvEscape).join(","));
+    return lines.join("\n");
+  }
   const totalRow = Array(header.length).fill("");
   totalRow[summaryIndex] = "Total";
   totalRow[finalIndex] = formatJobTotal(batch.currency, batch.total);

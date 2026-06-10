@@ -2,13 +2,22 @@ import type { JiraIssue, JobInput } from '../domain/types'
 import { parseDelimited } from './csv'
 
 const ticketPattern = /\bT\d{5}\b/i
+const customerRefPattern = /\b[A-Z]+-\d+(?:-R\d+)?\b/gi
 
 function get(row: Record<string, string>, key: string) {
   return String(row[key] ?? '').trim()
 }
 
+function summaryReferences(summary: string) {
+  return Array.from(new Set([
+    ...(summary.match(ticketPattern)?.map((value) => value.toUpperCase()) ?? []),
+    ...(summary.match(customerRefPattern)?.map((value) => value.toUpperCase()) ?? []),
+  ]))
+}
+
 function issueFromRow(row: Record<string, string>): JiraIssue {
   const summary = get(row, 'Summary')
+  const references = summaryReferences(summary)
   return {
     issueKey: get(row, 'Issue key'),
     issueId: get(row, 'Issue id'),
@@ -18,7 +27,8 @@ function issueFromRow(row: Record<string, string>): JiraIssue {
     taskFailure: get(row, 'Custom field (Task Failure)'),
     location: get(row, 'Custom field (Location)'),
     ttrComment: get(row, 'Custom field (TTR Comment)'),
-    customerTicket: summary.match(ticketPattern)?.[0]?.toUpperCase() ?? '',
+    customerTicket: references[0] ?? '',
+    summaryReferences: references,
   }
 }
 
@@ -32,11 +42,17 @@ export function importJiraIssuesFromText(text: string) {
 export function mergeJobsWithJira(jobs: JobInput[], issues: JiraIssue[]) {
   const byTicket = new Map<string, JiraIssue>()
   issues.forEach((issue) => {
-    if (issue.customerTicket && !byTicket.has(issue.customerTicket)) byTicket.set(issue.customerTicket, issue)
+    const references = issue.summaryReferences?.length ? issue.summaryReferences : issue.customerTicket ? [issue.customerTicket] : []
+    references.forEach((reference) => {
+      if (reference && !byTicket.has(reference)) byTicket.set(reference, issue)
+    })
   })
 
   const mergedJobs = jobs.map((job) => {
-    const issue = byTicket.get(job.ticket.toUpperCase())
+    const issue = [
+      job.ticket.toUpperCase(),
+      job.customerRef.toUpperCase(),
+    ].map((reference) => byTicket.get(reference)).find(Boolean)
     if (!issue) return job
     return {
       ...job,

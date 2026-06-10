@@ -1,4 +1,5 @@
 import { formatDisplayDate, normalizeServiceDate, normalizeTimestamp, parseWorkTimestamp } from "../domain/dates";
+import { ensureUniqueJobIds } from "../domain/jobIds";
 import { parseAmount } from "../domain/money";
 import type { ImportResult, JobInput } from "../domain/types";
 import { parseDelimited } from "./csv";
@@ -13,6 +14,7 @@ const aliases = {
   technician: ["technician", "engineer", "assigned technician", "resource"],
   summary: ["summary", "description", "scope", "job summary", "sow"],
   reportStatus: ["report status", "status", "work report status", "result"],
+  completionNotes: ["completion notes", "notes", "note", "work notes"],
   travelStart: ["travel start", "travelstart", "departed", "travel from"],
   onSite: ["on site", "onsite", "arrival", "arrived", "site arrival", "work start", "start"],
   offSite: ["off site", "offsite", "departure", "left site", "site departure", "work end", "end"],
@@ -75,6 +77,7 @@ function rowToJob(row: Record<string, string>, index: number): JobInput {
     technician: pick(lookup, aliases.technician),
     summary: pick(lookup, aliases.summary),
     reportStatus: pick(lookup, aliases.reportStatus),
+    completionNotes: pick(lookup, aliases.completionNotes),
     travelStart: normalizeTimestamp(pick(lookup, aliases.travelStart)),
     onSite,
     offSite,
@@ -111,7 +114,7 @@ export function importJobsFromText(text: string, fileName = "report"): ImportRes
     rows = parseDelimited(text).rows;
   }
 
-  const jobs = rows.map(rowToJob).filter((job) => Object.values(job.raw).some(Boolean));
+  const jobs = ensureUniqueJobIds(rows.map(rowToJob).filter((job) => Object.values(job.raw).some(Boolean)));
   if (!jobs.length) warnings.push("No job rows were found in the uploaded report.");
   return { jobs, warnings };
 }

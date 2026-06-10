@@ -1,8 +1,7 @@
 import { formatDisplayDate, normalizeServiceDate, normalizeTimestamp, parseWorkTimestamp } from '../domain/dates'
+import { ensureUniqueJobIds } from '../domain/jobIds'
 import { parseAmount } from '../domain/money'
 import type { ImportResult, JobInput } from '../domain/types'
-import { parseDelimited } from './csv'
-import { readFirstWorksheet } from './xlsxWorkbook'
 
 function get(row: Record<string, string>, key: string) {
   return String(row[key] ?? '').trim()
@@ -44,6 +43,7 @@ function rowToJob(row: Record<string, string>, index: number): JobInput {
     technician: get(row, 'Field Engineer'),
     summary: get(row, 'Subject'),
     reportStatus: get(row, 'Status'),
+    completionNotes: get(row, 'Completion Notes'),
     travelStart: combinedTimestamp(row, requestDateKey, 'Travel Start'),
     onSite: combinedTimestamp(row, requestDateKey, 'Time on-site'),
     offSite: combinedTimestamp(row, departureDateKey, 'Time off-site'),
@@ -54,19 +54,9 @@ function rowToJob(row: Record<string, string>, index: number): JobInput {
   }
 }
 
-function rowsToJobs(rows: Record<string, string>[], headers: string[], sheetName?: string): ImportResult {
+export function importTelesolRows(rows: Record<string, string>[], headers: string[], sheetName?: string): ImportResult {
   const warnings: string[] = []
-  const jobs = rows.map(rowToJob).filter((job) => job.ticket)
+  const jobs = ensureUniqueJobIds(rows.map(rowToJob).filter((job) => job.ticket))
   if (!jobs.length) warnings.push('No Telesol job rows were found in the customer report first sheet.')
   return { jobs, headers, sheetName, warnings }
-}
-
-export async function importCustomerReportFile(file: File): Promise<ImportResult> {
-  if (file.name.toLowerCase().endsWith('.xlsx')) {
-    const sheet = await readFirstWorksheet(file)
-    return rowsToJobs(sheet.rows, sheet.headers, sheet.name)
-  }
-
-  const parsed = parseDelimited(await file.text())
-  return rowsToJobs(parsed.rows, parsed.headers, 'Report')
 }
