@@ -1,4 +1,4 @@
-const { app, BrowserWindow, net, protocol } = require("electron");
+const { app, BrowserWindow, ipcMain, net, protocol } = require("electron");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const isWindows = process.platform === "win32";
@@ -24,18 +24,39 @@ function registerAppProtocol() {
   });
 }
 
+function activeWindow() {
+  return BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0] || null;
+}
+
+function sendMaximized(win) {
+  win.webContents.send("window:maximized", win.isMaximized());
+}
+
+function registerWindowControls() {
+  ipcMain.on("window:minimize", () => activeWindow()?.minimize());
+  ipcMain.on("window:close", () => activeWindow()?.close());
+  ipcMain.handle("window:is-maximized", () => activeWindow()?.isMaximized() ?? false);
+  ipcMain.handle("window:toggle-maximize", () => {
+    const win = activeWindow();
+    if (!win) return false;
+    if (win.isMaximized()) win.unmaximize();
+    else win.maximize();
+    return win.isMaximized();
+  });
+}
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1280,
     height: 860,
     minWidth: 1080,
     minHeight: 720,
+    frame: !isWindows,
     show: false,
     title: "Tytec Pricing Engine",
-    titleBarStyle: isWindows ? "hidden" : "default",
-    titleBarOverlay: isWindows ? { color: "#151922", symbolColor: "#ffffff", height: 38 } : undefined,
+    icon: path.join(__dirname, "../build/icon.ico"),
     autoHideMenuBar: true,
-    backgroundColor: isWindows ? "#151922" : "#f4f3f1",
+    backgroundColor: "#151922",
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
@@ -43,6 +64,8 @@ function createWindow() {
     },
   });
   win.once("ready-to-show", () => win.show());
+  win.on("maximize", () => sendMaximized(win));
+  win.on("unmaximize", () => sendMaximized(win));
 
   const devUrl = process.env.ELECTRON_START_URL;
   if (devUrl) {
@@ -55,6 +78,7 @@ function createWindow() {
 
 app.whenReady().then(() => {
   registerAppProtocol();
+  registerWindowControls();
   createWindow();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

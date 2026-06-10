@@ -1,14 +1,20 @@
 .erp-v2-shell {
-  --window-frame-height: env(titlebar-area-height, 0px);
+  display: flex;
+  flex-direction: column;
   min-height: 100vh;
-  padding-top: var(--window-frame-height);
   background: var(--erp-bg);
 }
 
+.erp-shell-body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 .erp-sidebar {
-  position: sticky !important;
-  top: var(--window-frame-height);
-  height: calc(100vh - var(--window-frame-height));
+  position: relative !important;
+  height: auto;
+  min-height: 100%;
   padding: 12px 10px;
   border-right: 1px solid #262c38;
   background: var(--erp-sidebar) !important;

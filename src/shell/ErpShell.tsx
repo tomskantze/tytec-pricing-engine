@@ -2,6 +2,7 @@ import { Layout } from 'antd'
 import type { ReactNode } from 'react'
 import type { ActiveView } from '../state/appState'
 import { NavigationPanel } from './NavigationPanel'
+import { WindowChrome } from './WindowChrome'
 
 const { Content } = Layout
 
@@ -16,9 +17,12 @@ export function ErpShell({
 }) {
   return (
     <Layout className="erp-v2-shell">
-      <NavigationPanel activeView={_activeView} onNavigate={onNavigate} />
-      <Layout className="erp-main-layout">
-        <Content className="erp-main-content">{children}</Content>
+      <WindowChrome />
+      <Layout className="erp-shell-body">
+        <NavigationPanel activeView={_activeView} onNavigate={onNavigate} />
+        <Layout className="erp-main-layout">
+          <Content className="erp-main-content">{children}</Content>
+        </Layout>
       </Layout>
     </Layout>
   )

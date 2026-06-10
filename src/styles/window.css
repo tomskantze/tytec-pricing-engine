@@ -1,0 +1,76 @@
+.window-chrome {
+  display: flex;
+  align-items: stretch;
+  min-height: 36px;
+  border-bottom: 1px solid #262c38;
+  background: var(--erp-sidebar);
+  color: rgba(255, 255, 255, 0.76);
+}
+
+.window-chrome-drag {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  min-width: 0;
+  padding: 0 12px;
+  -webkit-app-region: drag;
+}
+
+.window-chrome-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.window-chrome-mark {
+  display: grid;
+  flex: 0 0 18px;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  background: #ffffff;
+  color: var(--erp-sidebar);
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.window-chrome-title {
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.window-chrome-controls {
+  display: inline-flex;
+  flex: 0 0 auto;
+  -webkit-app-region: no-drag;
+}
+
+.window-control-button.ant-btn {
+  width: 46px;
+  min-width: 46px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  color: rgba(255, 255, 255, 0.82);
+  box-shadow: none;
+}
+
+.window-control-button.ant-btn:not(:disabled):hover,
+.window-control-button.ant-btn:not(:disabled):focus-visible {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.window-control-button.is-close.ant-btn:not(:disabled):hover,
+.window-control-button.is-close.ant-btn:not(:disabled):focus-visible {
+  background: #c42b1c;
+}

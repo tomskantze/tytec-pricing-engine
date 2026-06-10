@@ -35,10 +35,12 @@
     "appId": "com.tytec.pricingengine",
     "productName": "Tytec Pricing Engine",
     "asar": true,
+    "icon": "build/icon.ico",
     "directories": {
       "output": "release"
     },
     "files": [
+      "build/icon.ico",
       "dist/**/*",
       "electron/**/*",
       "package.json"
