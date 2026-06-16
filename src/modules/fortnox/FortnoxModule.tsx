@@ -5,7 +5,8 @@ import { getFortnoxArticleNumber } from '../../domain/fortnoxArticles'
 import type { FortnoxArticleMap, FortnoxLineKind } from '../../domain/fortnoxArticles'
 import { getLocationLabel } from '../../domain/matching'
 import { formatAmount } from '../../domain/money'
-import type { Customer, ShiftLabel } from '../../domain/types'
+import { getRateCardMode, showsFullShift } from '../../domain/rateCards'
+import type { Customer, RateCardMode, ShiftLabel } from '../../domain/types'
 import { CustomerSummary } from '../customers/CustomerSummary'
 
 type FortnoxRow = {
@@ -13,6 +14,7 @@ type FortnoxRow = {
   locationId: string
   location: string
   currency: string
+  rateCardMode: RateCardMode
   shift: ShiftLabel
   callOutFee: number
   additionalRate: number
@@ -38,6 +40,7 @@ function getRows(customer: Customer): FortnoxRow[] {
       locationId: location.id,
       location: getLocationLabel(location),
       currency: location.currency,
+      rateCardMode: getRateCardMode(location),
       shift: shift.shift,
       callOutFee: shift.callOutFee,
       additionalRate: shift.additionalHours,
@@ -46,11 +49,16 @@ function getRows(customer: Customer): FortnoxRow[] {
   )
 }
 
+function isCategoryRow(row: FortnoxRow) {
+  return row.rateCardMode === 'category'
+}
+
 function shouldShowFullShift(row: FortnoxRow) {
-  return row.shift === '08:00-18:00' || row.shift === '18:00-08:00'
+  return !isCategoryRow(row) && showsFullShift(row.shift)
 }
 
 function articleKinds(row: FortnoxRow): FortnoxLineKind[] {
+  if (isCategoryRow(row)) return ['additionalHour']
   return shouldShowFullShift(row) ? ['callOut', 'additionalHour', 'fullShift'] : ['callOut', 'additionalHour']
 }
 
@@ -63,33 +71,30 @@ function getGroups(rows: FortnoxRow[]): FortnoxLocationGroup[] {
   }, [])
 }
 
+function getArticle(row: FortnoxRow, kind: FortnoxLineKind, fortnoxArticles: FortnoxArticleMap) {
+  return getFortnoxArticleNumber(row.locationId, row.shift, kind, fortnoxArticles) ?? ''
+}
+
 function rowMatches(row: FortnoxRow, fortnoxArticles: FortnoxArticleMap, query: string) {
   if (!query) return true
+  const articleNumbers = articleKinds(row).map((kind) => getArticle(row, kind, fortnoxArticles))
   const haystack = [
     row.location,
     row.shift,
     row.callOutFee,
     row.additionalRate,
     row.fullShiftRate,
-    getFortnoxArticleNumber(row.locationId, row.shift, 'callOut', fortnoxArticles),
-    getFortnoxArticleNumber(row.locationId, row.shift, 'additionalHour', fortnoxArticles),
-    getFortnoxArticleNumber(row.locationId, row.shift, 'fullShift', fortnoxArticles),
+    ...articleNumbers,
   ].join(' ').toLowerCase()
   return haystack.includes(query)
 }
 
-function getArticle(row: FortnoxRow, kind: FortnoxLineKind, fortnoxArticles: FortnoxArticleMap) {
-  return getFortnoxArticleNumber(row.locationId, row.shift, kind, fortnoxArticles) ?? ''
-}
-
-function kindLabel(kind: FortnoxLineKind) {
-  if (kind === 'callOut') return 'Call-Out'
-  if (kind === 'fullShift') return 'Full Shift'
-  return 'Additional Hour'
-}
-
 function shiftTitle(shift: ShiftLabel) {
   return shift === 'Weekend / Holiday' ? 'Weekend/Holiday' : shift
+}
+
+function fullShiftLabel(row: FortnoxRow) {
+  return row.shift === '08:00-18:00' ? 'Full day' : 'Full night'
 }
 
 function rateForKind(row: FortnoxRow, kind: FortnoxLineKind) {
@@ -98,14 +103,15 @@ function rateForKind(row: FortnoxRow, kind: FortnoxLineKind) {
   return row.additionalRate
 }
 
-function fullShiftLabel(row: FortnoxRow) {
-  return row.shift === '08:00-18:00' ? 'Full day' : 'Full night'
+function kindLabel(row: FortnoxRow, kind: FortnoxLineKind) {
+  if (kind === 'callOut') return 'Call-Out'
+  if (kind === 'fullShift') return 'Full Shift'
+  return isCategoryRow(row) ? 'Hourly Rate' : 'Additional Hour'
 }
 
 function mappedCount(rows: FortnoxRow[], fortnoxArticles: FortnoxArticleMap) {
   return rows.reduce((count, row) => (
-    count
-    + articleKinds(row).filter((kind) => getArticle(row, kind, fortnoxArticles)).length
+    count + articleKinds(row).filter((kind) => getArticle(row, kind, fortnoxArticles)).length
   ), 0)
 }
 
@@ -168,9 +174,7 @@ export function FortnoxModule({
       <Card className="workspace-card" variant="borderless">
         {activeCustomer ? <CustomerSummary customer={activeCustomer} /> : null}
         <div className="toolbar-row">
-          <div>
-            <Typography.Text strong>Article Mapping</Typography.Text>
-          </div>
+          <Typography.Text strong>Article Mapping</Typography.Text>
           <Space size={8} wrap>
             <Input
               allowClear
@@ -198,20 +202,32 @@ export function FortnoxModule({
                         <strong>{shiftTitle(row.shift)}</strong>
                         <span>Article</span>
                       </div>
-                      <div className="fortnox-shift-card-row">
-                        <span>Call out {formatAmount(row.currency, row.callOutFee)}</span>
-                        <ArticleButton
-                          article={getArticle(row, 'callOut', fortnoxArticles)}
-                          onClick={() => openEditor(row, 'callOut')}
-                        />
-                      </div>
-                      <div className="fortnox-shift-card-row">
-                        <span>Per hour {formatAmount(row.currency, row.additionalRate)}</span>
-                        <ArticleButton
-                          article={getArticle(row, 'additionalHour', fortnoxArticles)}
-                          onClick={() => openEditor(row, 'additionalHour')}
-                        />
-                      </div>
+                      {isCategoryRow(row) ? (
+                        <div className="fortnox-shift-card-row">
+                          <span>Hourly rate {formatAmount(row.currency, row.additionalRate)}</span>
+                          <ArticleButton
+                            article={getArticle(row, 'additionalHour', fortnoxArticles)}
+                            onClick={() => openEditor(row, 'additionalHour')}
+                          />
+                        </div>
+                      ) : (
+                        <>
+                          <div className="fortnox-shift-card-row">
+                            <span>Call out {formatAmount(row.currency, row.callOutFee)}</span>
+                            <ArticleButton
+                              article={getArticle(row, 'callOut', fortnoxArticles)}
+                              onClick={() => openEditor(row, 'callOut')}
+                            />
+                          </div>
+                          <div className="fortnox-shift-card-row">
+                            <span>Per hour {formatAmount(row.currency, row.additionalRate)}</span>
+                            <ArticleButton
+                              article={getArticle(row, 'additionalHour', fortnoxArticles)}
+                              onClick={() => openEditor(row, 'additionalHour')}
+                            />
+                          </div>
+                        </>
+                      )}
                     </div>
                   ))}
                   {group.rows.filter(shouldShowFullShift).map((row) => (
@@ -246,7 +262,7 @@ export function FortnoxModule({
             <div className="fortnox-editor-grid">
               <div className="info-field"><span>Location</span><strong>{editor.row.location}</strong></div>
               <div className="info-field"><span>Shift</span><strong>{editor.row.shift}</strong></div>
-              <div className="info-field"><span>Line</span><strong>{kindLabel(editor.kind)}</strong></div>
+              <div className="info-field"><span>Line</span><strong>{kindLabel(editor.row, editor.kind)}</strong></div>
               <div className="info-field"><span>Rate</span><strong>{formatAmount(editor.row.currency, rateForKind(editor.row, editor.kind))}</strong></div>
               <Input
                 autoFocus
