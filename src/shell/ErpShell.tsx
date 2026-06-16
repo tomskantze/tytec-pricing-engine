@@ -4,8 +4,6 @@ import type { ActiveView } from '../state/appState'
 import { NavigationPanel } from './NavigationPanel'
 import { WindowChrome } from './WindowChrome'
 
-const { Content } = Layout
-
 export function ErpShell({
   activeView: _activeView,
   onNavigate,
@@ -21,7 +19,9 @@ export function ErpShell({
       <Layout className="erp-shell-body">
         <NavigationPanel activeView={_activeView} onNavigate={onNavigate} />
         <Layout className="erp-main-layout">
-          <Content className="erp-main-content">{children}</Content>
+          <div className="erp-main-scroll">
+            <div className="erp-main-content">{children}</div>
+          </div>
         </Layout>
       </Layout>
     </Layout>

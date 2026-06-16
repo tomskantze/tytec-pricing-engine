@@ -1,6 +1,11 @@
 export type InvoiceMode = "monthly" | "task";
 export type QueueState = "Ready" | "Blocked" | "Invoiced";
-export type ShiftLabel = "08:00-18:00" | "18:00-08:00" | "Weekend / Holiday";
+export type RateCardMode = "time-window" | "category";
+export type TimeWindowShiftLabel = "08:00-18:00" | "18:00-08:00" | "Weekend / Holiday";
+export type CategoryRateLabel = "REG" | "OBH1";
+export type CategoryRateType = "Day" | "Night";
+export type TierLevel = "Tier 1" | "Tier 2" | "Tier 3";
+export type ShiftLabel = TimeWindowShiftLabel | CategoryRateLabel;
 
 export type ShiftBucket = {
   bh: number;
@@ -16,19 +21,55 @@ export type ShiftRate = {
   fullShiftRate: number;
 };
 
+export type LocationTierRate = {
+  tier: TierLevel;
+  shift: CategoryRateLabel;
+  rateType: CategoryRateType;
+  rate: number;
+};
+
 export type LocationCard = {
   id: string;
   city: string;
   cityCode: string;
+  siteAliases?: string[];
   country: string;
   currency: string;
   invoiceMode: InvoiceMode;
+  rateCardMode?: RateCardMode;
   slaEnabled: boolean;
   slaAmount: number;
   slaAttributedTo?: string;
   slaNote?: string;
   shifts: ShiftRate[];
+  tierRates?: LocationTierRate[];
   endCustomerOverrides?: { endCustomer: string; invoiceMode: InvoiceMode }[];
+};
+
+export type TechnicianProfile = {
+  id: string;
+  name: string;
+  aliases?: string[];
+  active: boolean;
+};
+
+export type TechnicianRate = {
+  id: string;
+  technicianId: string;
+  locationId: string;
+  shift: CategoryRateLabel;
+  rateType: CategoryRateType;
+  rate: number;
+};
+
+export type TechnicianTierAssignment = {
+  id: string;
+  technicianId: string;
+  locationId: string;
+  tier: TierLevel;
+  obh1Enabled?: boolean;
+  dayRate?: number;
+  nightRate?: number;
 };
 
 export type Customer = {
@@ -41,6 +82,9 @@ export type Customer = {
   financeEmail: string;
   customerLegalId: string;
   locationCards: LocationCard[];
+  technicians?: TechnicianProfile[];
+  technicianRates?: TechnicianRate[];
+  technicianTierAssignments?: TechnicianTierAssignment[];
 };
 
 export type ReportedHours = {
@@ -49,9 +93,12 @@ export type ReportedHours = {
   wh: number;
 };
 
+export type ReportedHoursByLabel = Partial<Record<ShiftLabel, number>>;
+
 export type JobInput = {
   id: string;
   sourceRow: number;
+  customerKey?: string;
   date: string;
   businessEntity?: string;
   serviceAppointment?: string;
@@ -69,13 +116,16 @@ export type JobInput = {
   endCustomer: string;
   technician: string;
   summary: string;
+  sow?: string;
   reportStatus: string;
   completionNotes: string;
   travelStart: string;
   onSite: string;
   offSite: string;
   travelFinish: string;
+  publicHoliday?: boolean;
   reportedHours?: ReportedHours;
+  reportedHoursByLabel?: ReportedHoursByLabel;
   consumablesAmount: number;
   consumablesDescription: string;
   raw: Record<string, string>;
@@ -98,6 +148,8 @@ export type JobReviewOverride = {
   approved?: boolean;
   forceReview?: boolean;
   treatAsLocationId?: string;
+  manualRateLabel?: CategoryRateLabel;
+  manualRateType?: CategoryRateType;
   manualLaborAmount?: number;
   manualTravelAmount?: number;
   manualConsumablesAmount?: number;
@@ -117,13 +169,20 @@ export type LineItem = {
 export type PricingBreakdown = {
   currency: string;
   crossedShift: boolean;
+  method: "single-shift-callout" | "split-shift" | "start-shift-callout";
   callOutFee: number;
+  callOutShift?: TimeWindowShiftLabel;
+  includedHours?: number;
   hours: { bh: number; obh: number; wh: number };
   splitHours: ShiftBucket;
   bhAmount: number;
   obhAmount: number;
   whAmount: number;
   totalAmount: number;
+  comparison?: {
+    splitShift: number;
+    startShiftCallOut: number;
+  };
   lineItems: LineItem[];
 };
 
@@ -167,6 +226,7 @@ export type InvoiceBatch = {
 export type InvoiceSummary = {
   invoiceId: string;
   label: string;
+  sourceKind: "import" | "generated";
   jobs: number;
   reviewCount: number;
   laborTotal: number;

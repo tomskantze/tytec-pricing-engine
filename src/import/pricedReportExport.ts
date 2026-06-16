@@ -1,4 +1,5 @@
 import { normalizeServiceDate } from '../domain/dates'
+import { getPricingExplanationLines } from '../domain/pricingExplanation'
 import type { PricedJob } from '../domain/types'
 
 type Sheet = { name: string; rows: string[][] }
@@ -132,12 +133,17 @@ function sourceValue(job: PricedJob, header: string) {
   return value
 }
 
+function pricingLogic(job: PricedJob) {
+  return getPricingExplanationLines(job, false).map((line) => line.text).join(' | ')
+}
+
 function reportRows(jobs: PricedJob[], sourceHeaders: string[]) {
-  const headers = [...sourceHeaders, 'Amount', 'Tytec Ticket']
+  const headers = [...sourceHeaders, 'Amount', 'Tytec Ticket', 'Pricing Logic']
   const rows = jobs.slice().sort((left, right) => left.sourceRow - right.sourceRow).map((job) => [
     ...sourceHeaders.map((header) => sourceValue(job, header)),
     amount(job.totalAmount),
     job.jiraIssueKey ?? '',
+    pricingLogic(job),
   ])
   return [headers, ...rows]
 }

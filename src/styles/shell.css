@@ -1,20 +1,28 @@
 .erp-v2-shell {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
+  padding-top: 36px;
   background: var(--erp-bg);
 }
 
 .erp-shell-body {
   display: flex;
   flex: 1 1 auto;
+  align-items: stretch;
   min-height: 0;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .erp-sidebar {
   position: relative !important;
-  height: auto;
-  min-height: 100%;
+  align-self: stretch;
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: 12px 10px;
   border-right: 1px solid #262c38;
   background: var(--erp-sidebar) !important;
@@ -139,14 +147,29 @@
 }
 
 .erp-main-layout {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
   background: var(--erp-bg);
 }
 
+.erp-main-scroll {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
 .erp-main-content {
-  display: grid;
-  align-content: start;
+  display: flex;
+  flex-direction: column;
   gap: var(--erp-gap);
-  padding: 14px;
+  min-width: 0;
+  padding: 0 14px 14px;
 }
 
 .customer-workspace-topbar {
@@ -154,10 +177,14 @@
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  min-height: 54px;
-  margin: -14px -14px 0;
+  position: sticky;
+  top: 0;
+  z-index: 16;
+  min-height: 44px;
+  margin: 0 -14px 0;
   padding: 0 14px;
   border-bottom: 1px solid var(--erp-border);
+  box-shadow: 0 1px 0 rgba(17, 24, 39, 0.04);
   background: #e9edf2;
 }
 
@@ -185,14 +212,14 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  height: 54px;
-  padding: 0 12px;
+  height: 44px;
+  padding: 0 10px;
   border: 0;
   border-bottom: 3px solid transparent;
   background: transparent;
   color: #5f7083;
   font: inherit;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 560;
   white-space: nowrap;
   cursor: pointer;
@@ -224,7 +251,7 @@
 
 .customer-workspace-current {
   color: var(--erp-text);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 560;
   white-space: nowrap;
 }

@@ -25,6 +25,7 @@ function card(
     country,
     currency: "EUR",
     invoiceMode: "monthly",
+    rateCardMode: "time-window",
     slaEnabled: slaAmount > 0,
     slaAmount,
     slaAttributedTo: slaAmount > 0 ? "Telesol IT B.V." : undefined,

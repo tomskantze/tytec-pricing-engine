@@ -128,3 +128,17 @@ export function formatFortnoxArticleNumbers(lineItems: LineItem[] | undefined, e
   const articleNumbers = Array.from(new Set((lineItems ?? []).map((item) => item.articleNumber).filter(Boolean)));
   return articleNumbers.length ? articleNumbers.join(", ") : emptyValue;
 }
+
+function formatQuantity(value: number) {
+  return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/\.?0+$/, "");
+}
+
+export function formatFortnoxArticleUsage(lineItems: LineItem[] | undefined, emptyValue = "-") {
+  const usage = new Map<string, number>();
+  (lineItems ?? []).forEach((item) => {
+    if (!item.articleNumber) return;
+    usage.set(item.articleNumber, (usage.get(item.articleNumber) || 0) + item.quantity);
+  });
+  const values = Array.from(usage.entries()).map(([articleNumber, quantity]) => `${articleNumber} x ${formatQuantity(quantity)}`);
+  return values.length ? values.join(", ") : emptyValue;
+}

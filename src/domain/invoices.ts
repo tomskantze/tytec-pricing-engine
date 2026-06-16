@@ -43,6 +43,10 @@ function entityToken(value: string) {
   return value.toUpperCase().replace(/[^A-Z0-9]+/g, "");
 }
 
+function akamaiBatchLabel(period: string) {
+  return `AKAMAI-${period.toUpperCase().replace(/\s+/g, "-")}`
+}
+
 export function buildInvoiceBatches(customer: Customer, jobs: PricedJob[], _includeSla: boolean): InvoiceBatch[] {
   const rows: InvoiceBatch[] = [];
   const taskJobs = jobs.filter((job) => job.invoiceMode === "task");
@@ -84,7 +88,9 @@ export function buildInvoiceBatches(customer: Customer, jobs: PricedJob[], _incl
     const combinedTotal = batchTotal(periodJobs, slaTotal);
     rows.push({
       batchKind: "jobs",
-      batch: `INV-${customer.customerKey}-${entityToken(businessEntity)}-${period.replace(/\s+/g, "")}`,
+      batch: customer.customerKey === "AKAM"
+        ? akamaiBatchLabel(period)
+        : `INV-${customer.customerKey}-${entityToken(businessEntity)}-${period.replace(/\s+/g, "")}`,
       customer: businessEntity,
       businessEntity,
       invoiceMode: "Monthly",
@@ -101,7 +107,9 @@ export function buildInvoiceBatches(customer: Customer, jobs: PricedJob[], _incl
     if (slaLines.length) {
       rows.push({
         batchKind: "sla",
-        batch: `SLA-${customer.customerKey}-${entityToken(businessEntity)}-${period.replace(/\s+/g, "")}`,
+        batch: customer.customerKey === "AKAM"
+          ? `AKAMAI-SLA-${period.toUpperCase().replace(/\s+/g, "-")}`
+          : `SLA-${customer.customerKey}-${entityToken(businessEntity)}-${period.replace(/\s+/g, "")}`,
         customer: businessEntity,
         businessEntity,
         invoiceMode: "Retainer",

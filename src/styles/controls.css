@@ -117,6 +117,12 @@
   white-space: nowrap;
 }
 
+.info-field strong.info-field-value-wrap {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+
 .table-primary-text {
   display: block;
   min-width: 0;

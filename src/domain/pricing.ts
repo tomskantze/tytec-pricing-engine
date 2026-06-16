@@ -1,10 +1,12 @@
+import { getCrossedShiftPricing } from "./crossedShiftPricing";
 import { getShiftLabelForDate, parseWorkTimestamp } from "./dates";
 import { getFortnoxArticleNumber } from "./fortnoxArticles";
 import type { FortnoxArticleMap } from "./fortnoxArticles";
 import { getMatchedLocationCard } from "./matching";
 import { roundMoney } from "./money";
+import { getRateCardMode } from "./rateCards";
 import { getReportedHourBuckets, getReportedHoursPricing } from "./reportedHours";
-import type { Customer, JobInput, JobReviewOverride, LocationCard, PricedJob, PricingBreakdown, ShiftBucket, ShiftRate } from "./types";
+import type { Customer, JobInput, JobReviewOverride, LocationCard, PricedJob, PricingBreakdown, ShiftBucket, ShiftRate, TimeWindowShiftLabel } from "./types";
 
 function isCancellation(job: JobInput): boolean {
   return job.reportStatus.trim().toLowerCase() === "last minute cancellation";
@@ -18,6 +20,14 @@ function isShadowing(job: JobInput): boolean {
   return /\bshadow(?:ed|ing)?\b/.test(text);
 }
 
+function hasReportedHourData(job: JobInput): boolean {
+  if (job.reportedHours && [job.reportedHours.bh, job.reportedHours.obh, job.reportedHours.wh].some((value) => value > 0)) {
+    return true
+  }
+  if (!job.reportedHoursByLabel) return false
+  return Object.values(job.reportedHoursByLabel).some((value) => Number(value || 0) > 0)
+}
+
 function getWorkInterval(job: JobInput): { start: Date; end: Date } | null {
   const start = parseWorkTimestamp(job.onSite);
   const end = parseWorkTimestamp(job.offSite);
@@ -25,6 +35,10 @@ function getWorkInterval(job: JobInput): { start: Date; end: Date } | null {
   const normalizedEnd = new Date(end.getTime());
   if (normalizedEnd < start) normalizedEnd.setDate(normalizedEnd.getDate() + 1);
   return { start, end: normalizedEnd };
+}
+
+function shiftLabelForJob(job: JobInput, value: Date) {
+  return job.publicHoliday ? "Weekend / Holiday" : getShiftLabelForDate(value);
 }
 
 function getShiftHourBuckets(job: JobInput): ShiftBucket {
@@ -39,7 +53,7 @@ function getShiftHourBuckets(job: JobInput): ShiftBucket {
   while (current < interval.end) {
     const next = new Date(Math.min(current.getTime() + 15 * 60 * 1000, interval.end.getTime()));
     const minutes = (next.getTime() - current.getTime()) / 60000;
-    const label = getShiftLabelForDate(current);
+    const label = shiftLabelForJob(job, current);
     if (label === "08:00-18:00") bh += minutes;
     else if (label === "18:00-08:00") night += minutes;
     else weekend += minutes;
@@ -47,14 +61,6 @@ function getShiftHourBuckets(job: JobInput): ShiftBucket {
   }
 
   return { bh: bh / 60, night: night / 60, weekend: weekend / 60 };
-}
-
-function getShiftMap(card: LocationCard) {
-  return {
-    bh: card.shifts.find((row) => row.shift === "08:00-18:00"),
-    night: card.shifts.find((row) => row.shift === "18:00-08:00"),
-    weekend: card.shifts.find((row) => row.shift === "Weekend / Holiday"),
-  };
 }
 
 function calculateShiftRowAmount(rateRow: ShiftRate, hours: number, includeCallOut: boolean) {
@@ -70,41 +76,50 @@ function calculateShiftRowAmount(rateRow: ShiftRate, hours: number, includeCallO
 }
 
 function findRateRow(card: LocationCard, job: JobInput): ShiftRate | undefined {
+  if (getRateCardMode(card) !== 'time-window') return undefined;
   const start = parseWorkTimestamp(job.onSite || job.travelStart);
   if (!start) return undefined;
-  const shift = getShiftLabelForDate(start);
+  const shift = shiftLabelForJob(job, start);
   return card.shifts.find((row) => row.shift === shift);
 }
 
 export function getManualReasons(customer: Customer, job: JobInput, card?: LocationCard): string[] {
   const reasons: string[] = [];
   const reportedHours = getReportedHourBuckets(job);
-  if (!job.ticket) reasons.push("Missing ticket");
-  if (!job.jiraIssueKey) reasons.push("No Jira ticket match");
-  if (!job.city || !job.country) reasons.push("Missing city or country");
-  if (!card) reasons.push("No Telesol rate card for this location");
+  const hasReportedHours = hasReportedHourData(job);
+  const categoryRateCard = getRateCardMode(card) === 'category';
+  if (!job.ticket && !categoryRateCard) reasons.push("Missing ticket");
+  if (!job.jiraIssueKey && !categoryRateCard) reasons.push("No Jira ticket match");
+  if ((!job.city || !job.country) && !card) reasons.push("Missing city or country");
+  if (!card) reasons.push("No customer rate card for this location");
   if (isCancellation(job)) reasons.push("Cancellation pricing needs manual decision");
   if (isShadowing(job)) reasons.push("Shadowing visit is not billable");
 
-  if (!reportedHours && !getWorkInterval(job)) reasons.push("Work-report timestamps incomplete");
-  if (card && !reportedHours && !findRateRow(card, job)) reasons.push("No rate row for derived shift");
+  if (!hasReportedHours && !getWorkInterval(job)) reasons.push("Work-report timestamps incomplete");
+  if (card && getRateCardMode(card) === 'time-window' && !reportedHours && !findRateRow(card, job)) reasons.push("No rate row for derived shift");
   if (!customer.locationCards.length) reasons.push("No customer rate cards configured");
   return reasons;
 }
 
-export function getPricingBreakdown(card: LocationCard, job: JobInput, fortnoxArticles?: FortnoxArticleMap): PricingBreakdown | null {
+export function getPricingBreakdown(
+  customer: Customer,
+  card: LocationCard,
+  job: JobInput,
+  fortnoxArticles?: FortnoxArticleMap,
+  override?: JobReviewOverride,
+): PricingBreakdown | null {
   if (isCancellation(job)) return null;
-  const reportedHoursPricing = getReportedHoursPricing(card, job, fortnoxArticles);
+  const reportedHoursPricing = getReportedHoursPricing(customer, card, job, fortnoxArticles, override);
   if (reportedHoursPricing) return reportedHoursPricing;
+  if (getRateCardMode(card) !== 'time-window') return null;
 
   const interval = getWorkInterval(job);
   if (!interval) return null;
 
-  const shiftRows = getShiftMap(card);
   const buckets = getShiftHourBuckets(job);
-  const startShift = getShiftLabelForDate(interval.start);
+  const startShift = shiftLabelForJob(job, interval.start) as TimeWindowShiftLabel;
   const endMarker = new Date(interval.end.getTime() - 1);
-  const endShift = getShiftLabelForDate(endMarker);
+  const endShift = shiftLabelForJob(job, endMarker) as TimeWindowShiftLabel;
   const usedShiftCount = [buckets.bh, buckets.night, buckets.weekend].filter((value) => value > 0).length;
   const crossedShift = usedShiftCount > 1 || startShift !== endShift;
 
@@ -121,7 +136,10 @@ export function getPricingBreakdown(card: LocationCard, job: JobInput, fortnoxAr
     return {
       currency: card.currency,
       crossedShift: false,
+      method: "single-shift-callout",
       callOutFee: charge.callOutFee,
+      callOutShift: startShift,
+      includedHours: row.includedHours,
       hours: {
         bh: isBusiness ? charge.additionalHours : 0,
         obh: isNight ? charge.additionalHours : 0,
@@ -158,46 +176,7 @@ export function getPricingBreakdown(card: LocationCard, job: JobInput, fortnoxAr
       ],
     };
   }
-
-  const billed = { ...buckets };
-  if (startShift === "08:00-18:00") billed.bh += 0.5;
-  else if (startShift === "18:00-08:00") billed.night += 0.5;
-  else billed.weekend += 0.5;
-  if (endShift === "08:00-18:00") billed.bh += 0.5;
-  else if (endShift === "18:00-08:00") billed.night += 0.5;
-  else billed.weekend += 0.5;
-
-  const bh = shiftRows.bh ? calculateShiftRowAmount(shiftRows.bh, billed.bh, false) : null;
-  const night = shiftRows.night ? calculateShiftRowAmount(shiftRows.night, billed.night, false) : null;
-  const weekend = shiftRows.weekend ? calculateShiftRowAmount(shiftRows.weekend, billed.weekend, false) : null;
-  if (!bh || !night || !weekend) return null;
-  const lineItems = [
-    { hours: billed.bh, charge: bh, amount: bh.amount, label: "BH Hours", shift: "08:00-18:00" as const },
-    { hours: billed.night, charge: night, amount: night.amount, label: "OBH/Night Hours", shift: "18:00-08:00" as const },
-    { hours: billed.weekend, charge: weekend, amount: weekend.amount, label: "Weekend / Holiday Hours", shift: "Weekend / Holiday" as const, capped: false },
-  ]
-    .filter(({ hours }) => hours > 0)
-    .map(({ hours, charge, amount, label, shift }) => ({
-      articleNumber: getFortnoxArticleNumber(card.id, shift, "additionalHour", fortnoxArticles),
-      description: label,
-      quantity: Number(hours.toFixed(2)),
-      unitPrice: charge.additionalHourRate,
-      total: amount,
-      currency: card.currency,
-    }));
-
-  return {
-    currency: card.currency,
-    crossedShift: true,
-    callOutFee: 0,
-    hours: { bh: billed.bh, obh: billed.night, wh: billed.weekend },
-    splitHours: billed,
-    bhAmount: bh.amount,
-    obhAmount: night.amount,
-    whAmount: weekend.amount,
-    totalAmount: roundMoney(bh.amount + night.amount + weekend.amount),
-    lineItems,
-  };
+  return getCrossedShiftPricing(card, interval, buckets, startShift, endShift, fortnoxArticles);
 }
 
 function getOverrideLocation(customer: Customer, override?: JobReviewOverride): LocationCard | undefined {
@@ -234,7 +213,7 @@ export function priceJob(customer: Customer, job: JobInput, override?: JobReview
   }
 
   const manualReasons = getManualReasons(customer, job, matchedLocation);
-  const pricing = matchedLocation ? getPricingBreakdown(matchedLocation, job, fortnoxArticles) : null;
+  const pricing = matchedLocation ? getPricingBreakdown(customer, matchedLocation, job, fortnoxArticles, override) : null;
   const currency = matchedLocation?.currency || "EUR";
   const isReviewHold = Boolean(override?.forceReview && !override.approved && !hasManualAmounts);
   const laborAmount = manualLabor ?? (isReviewHold ? null : pricing?.totalAmount ?? null);
@@ -244,7 +223,10 @@ export function priceJob(customer: Customer, job: JobInput, override?: JobReview
   const totalAmount = blockedForShadowing || laborAmount == null ? null : roundMoney(laborAmount + travelAmount + consumablesAmount);
   const approvedReady = Boolean((override?.approved || hasManualAmounts) && totalAmount != null);
   const reviewReasons = isReviewHold ? ["Manual review requested"] : [];
-  const allReasons = approvedReady ? [] : [...reviewReasons, ...(pricing && !manualReasons.length ? [] : manualReasons)];
+  const pricingReasons = !pricing && matchedLocation && getRateCardMode(matchedLocation) === 'category'
+    ? ['No technician or fallback rate for this Akamai line']
+    : []
+  const allReasons = approvedReady ? [] : [...reviewReasons, ...(pricing && !manualReasons.length ? [] : manualReasons), ...pricingReasons];
 
   return {
     ...job,

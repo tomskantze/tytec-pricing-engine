@@ -1,3 +1,4 @@
+import { getTechnicianAssignedLocation } from "./technicians";
 import type { Customer, JobInput, LocationCard } from "./types";
 
 export function normalizeLocationText(value: string): string {
@@ -49,12 +50,15 @@ export function normalizeCountry(value: string): string {
 }
 
 function cityTokens(card: LocationCard): string[] {
+  const aliases = (card.siteAliases || [])
+    .map((item) => item.trim())
+    .filter(Boolean);
   const names = card.city
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
   const codes = card.cityCode.split(/[\/,]/).map((item) => item.trim());
-  return [card.city, card.cityCode, ...codes, ...names].map(normalizeLocationText).filter(Boolean);
+  return [card.city, card.cityCode, ...codes, ...names, ...aliases].map(normalizeLocationText).filter(Boolean);
 }
 
 export function getLocationCardForText(customer: Customer, value: string): LocationCard | undefined {
@@ -68,11 +72,13 @@ export function getLocationCardForText(customer: Customer, value: string): Locat
 export function getMatchedLocationCard(customer: Customer, job: JobInput): LocationCard | undefined {
   const city = normalizeLocationText(job.city);
   const country = normalizeCountry(job.country);
-  return customer.locationCards.find((card) => {
+  const directMatch = customer.locationCards.find((card) => {
     const sameCity = cityTokens(card).includes(city);
     const sameCountry = normalizeCountry(card.country) === country;
     return sameCity && sameCountry;
   });
+  if (directMatch) return directMatch;
+  return getTechnicianAssignedLocation(customer, job.technician);
 }
 
 export function getLocationLabel(card: LocationCard): string {

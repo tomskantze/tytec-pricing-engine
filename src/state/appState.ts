@@ -1,11 +1,15 @@
+import { withAkamaiDefaults } from "../data/akamaiCustomer";
 import { defaultTelesolCustomers, splitSharedTelesolLocationCards, telesolCustomer, telesolUsCustomer } from "../data/telesolCustomer";
 import { defaultFortnoxArticles, withFortnoxArticleDefaults } from "../domain/fortnoxArticles";
 import type { FortnoxArticleMap } from "../domain/fortnoxArticles";
 import { ensureUniqueJobIds } from "../domain/jobIds";
 import type { Customer, JiraIssue, JobInput, JobReviewOverride } from "../domain/types";
+import type { SavedQuote } from "../modules/fortnox/quoteTypes";
+import { repairCreatedJobFromRaw } from "../modules/create-job/createJobParser";
+import { normalizeQuote } from "./quoteState";
 
-export type ActiveView = "customers" | "fortnox";
-export type CustomerWorkspaceTab = "overview" | "invoices" | "review-queue";
+export type ActiveView = "customers" | "fortnox" | "quote-builder";
+export type CustomerWorkspaceTab = "overview" | "create-job" | "invoices" | "review-queue" | "technicians";
 
 export type AppState = {
   activeView: ActiveView;
@@ -14,6 +18,7 @@ export type AppState = {
   selectedCustomerKey: string;
   selectedInvoiceCustomerKey: string;
   selectedFortnoxCustomerKey: string;
+  quotes: SavedQuote[];
   customerWorkspaceTab: CustomerWorkspaceTab;
   importRuns: ImportRun[];
   activeImportRunId: string;
@@ -34,11 +39,13 @@ export type AppState = {
 
 export type RunDocumentMeta = {
   id: string;
-  kind: "customer-report" | "jira-report";
+  kind: "customer-report" | "jira-report" | "invoice-pdf" | "payinfo-pdf";
   fileName: string;
   mimeType: string;
   size: number;
   uploadedAt: string;
+  previewUrl?: string;
+  storedPath?: string;
 };
 
 export type ImportRun = {
@@ -75,6 +82,7 @@ export const initialState: AppState = {
   selectedCustomerKey: "",
   selectedInvoiceCustomerKey: "",
   selectedFortnoxCustomerKey: "",
+  quotes: [],
   customerWorkspaceTab: "overview",
   importRuns: [],
   activeImportRunId: "",
@@ -175,15 +183,21 @@ function withCustomerDefaults(customer: Customer): Customer {
   }
 
   const isTelesol = customer.customerKey === "TELE" || normalizedName === normalizeEntity(telesolCustomer.name);
-  if (!isTelesol) return customer;
-  return {
-    ...customer,
-    customerKey: "TELE",
-    name: "Telesol IT B.V.",
-    locationCards: splitSharedTelesolLocationCards(customer.locationCards).map((card) =>
-      card.slaEnabled && card.slaAmount > 0 ? { ...card, slaAttributedTo: telesolSlaEntity } : card
-    ),
-  };
+  if (isTelesol) {
+    return {
+      ...customer,
+      customerKey: "TELE",
+      name: "Telesol IT B.V.",
+      locationCards: splitSharedTelesolLocationCards(customer.locationCards).map((card) =>
+        card.slaEnabled && card.slaAmount > 0 ? { ...card, slaAttributedTo: telesolSlaEntity } : card
+      ),
+    };
+  }
+  return withAkamaiDefaults(customer);
+}
+
+export function applyCustomerDefaults(customer: Customer) {
+  return withCustomerDefaults(customer)
 }
 
 function ensureDefaultCustomers(customers: Customer[]): Customer[] {
@@ -201,12 +215,25 @@ function getPersistedCustomers(parsed: PersistedState): Customer[] {
   return ensureDefaultCustomers(customers);
 }
 
+function repairCreatedJobs(jobs: JobInput[], customers: Customer[]) {
+  const customersByKey = new Map(customers.map((customer) => [customer.customerKey, customer]))
+  return jobs.map((job) => {
+    const rawSummary = String(job.raw?.summary || '').trim()
+    const rawWorkReport = String(job.raw?.workReport || '').trim()
+    if (!rawSummary || !rawWorkReport) return job
+    const customer = customersByKey.get(job.customerKey || '') || customersByKey.get('TELE') || customers[0]
+    return customer ? repairCreatedJobFromRaw(customer, job) : job
+  })
+}
+
 export function hydrateState(parsed: PersistedState): AppState {
   const customers = getPersistedCustomers(parsed);
   const legacy = legacyRun(parsed);
   const rawActiveView = String(parsed.activeView || "");
+  const selectedCustomerKey = parsed.selectedCustomerKey || "";
+  const selectedInvoiceCustomerKey = parsed.selectedInvoiceCustomerKey || selectedCustomerKey || "";
   const customerJobs = ensureUniqueJobIds(Array.isArray(parsed.customerJobs) ? parsed.customerJobs : Array.isArray(parsed.jobs) ? parsed.jobs : []);
-  const jobs = ensureUniqueJobIds(Array.isArray(parsed.jobs) ? parsed.jobs : []);
+  const jobs = ensureUniqueJobIds(repairCreatedJobs(Array.isArray(parsed.jobs) ? parsed.jobs : [], customers));
   const importRuns = Array.isArray(parsed.importRuns)
     ? parsed.importRuns.map((run) => normalizeRun(run, parsed.selectedInvoiceCustomerKey || "TELE"))
     : legacy ? [legacy] : [];
@@ -216,13 +243,24 @@ export function hydrateState(parsed: PersistedState): AppState {
   return {
       ...initialState,
       ...parsed,
-      activeView: parsed.activeView === "fortnox" ? "fortnox" : "customers",
+      activeView:
+        parsed.activeView === "fortnox" ? "fortnox"
+        : parsed.activeView === "quote-builder" ? "quote-builder"
+        : "customers",
       customers,
       fortnoxArticles: withFortnoxArticleDefaults(parsed.fortnoxArticles),
-      selectedCustomerKey: parsed.selectedCustomerKey || "",
-      selectedInvoiceCustomerKey: parsed.selectedInvoiceCustomerKey || "",
+      selectedCustomerKey,
+      selectedInvoiceCustomerKey,
       selectedFortnoxCustomerKey: parsed.selectedFortnoxCustomerKey || "",
-      customerWorkspaceTab: rawActiveView === "review-queue" ? "review-queue" : rawActiveView === "invoice-prep" ? "invoices" : parsed.customerWorkspaceTab === "review-queue" ? "review-queue" : parsed.customerWorkspaceTab === "invoices" ? "invoices" : "overview",
+      quotes: Array.isArray(parsed.quotes) ? parsed.quotes.map((quote) => normalizeQuote(quote)) : [],
+      customerWorkspaceTab:
+        rawActiveView === "review-queue" ? "review-queue"
+        : rawActiveView === "invoice-prep" ? "invoices"
+        : parsed.customerWorkspaceTab === "review-queue" ? "review-queue"
+        : parsed.customerWorkspaceTab === "invoices" ? "invoices"
+        : parsed.customerWorkspaceTab === "create-job" ? "create-job"
+        : parsed.customerWorkspaceTab === "technicians" ? "technicians"
+        : "overview",
       importRuns,
       activeImportRunId,
       customerJobs,

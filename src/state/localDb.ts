@@ -1,6 +1,6 @@
-import type { AppState } from './appState'
+import type { AppState, RunDocumentMeta } from './appState'
 
-export type StoredDocumentKind = 'customer-report' | 'jira-report'
+export type StoredDocumentKind = RunDocumentMeta['kind']
 
 export type StoredDocumentMeta = {
   id: string
@@ -12,6 +12,10 @@ export type StoredDocumentMeta = {
 }
 
 type StoredDocument = StoredDocumentMeta & {
+  content: Blob
+}
+
+export type StoredDocumentView = StoredDocumentMeta & {
   content: Blob
 }
 
@@ -71,22 +75,41 @@ export async function saveDbState(state: AppState) {
   await transactionDone(transaction)
 }
 
-export async function saveUploadedDocument(kind: StoredDocumentKind, file: File) {
+export async function saveUploadedDocument(documentMeta: RunDocumentMeta, file: Blob) {
   const db = await openLocalDb()
-  const uploadedAt = new Date().toISOString()
   const document: StoredDocument = {
-    id: kind,
-    kind,
-    fileName: file.name,
-    mimeType: file.type || 'application/octet-stream',
-    size: file.size,
-    uploadedAt,
+    id: documentMeta.id,
+    kind: documentMeta.kind,
+    fileName: documentMeta.fileName,
+    mimeType: documentMeta.mimeType || 'application/octet-stream',
+    size: documentMeta.size,
+    uploadedAt: documentMeta.uploadedAt,
     content: file,
   }
   const transaction = db.transaction('documents', 'readwrite')
   transaction.objectStore('documents').put(document)
   await transactionDone(transaction)
   return toDocumentMeta(document)
+}
+
+export async function getUploadedDocument(id: string): Promise<StoredDocumentView | null> {
+  const db = await openLocalDb()
+  const transaction = db.transaction('documents', 'readonly')
+  const document = await requestResult<StoredDocument | undefined>(transaction.objectStore('documents').get(id))
+  if (!document) return null
+  return {
+    id: document.id,
+    kind: document.kind,
+    fileName: document.fileName,
+    mimeType: document.mimeType,
+    size: document.size,
+    uploadedAt: document.uploadedAt,
+    content: document.content,
+  }
+}
+
+export async function getUploadedDocumentByKind(kind: StoredDocumentKind): Promise<StoredDocumentView | null> {
+  return getUploadedDocument(kind)
 }
 
 export async function listUploadedDocuments() {

@@ -12,7 +12,10 @@ export function roundMoney(value: number): number {
 
 export function formatAmount(currency: string, value: number | null | undefined): string {
   if (value == null) return "Pending";
-  const normalized = roundMoney(value).toFixed(2);
+  const normalized = new Intl.NumberFormat(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(roundMoney(value));
   return currency === "EUR" ? `€${normalized}` : `${currency} ${normalized}`;
 }
 

@@ -1,4 +1,4 @@
-import { LeftOutlined, RightOutlined, TagsOutlined, TeamOutlined } from '@ant-design/icons'
+import { FileTextOutlined, LeftOutlined, RightOutlined, TagsOutlined, TeamOutlined } from '@ant-design/icons'
 import { Button, Layout } from 'antd'
 import type { ReactNode } from 'react'
 import { useState } from 'react'
@@ -10,6 +10,7 @@ const collapsedNavWidth = 68
 const navigationItems: Array<{ key: ActiveView; label: string; icon: ReactNode }> = [
   { key: 'customers', label: 'Customers', icon: <TeamOutlined /> },
   { key: 'fortnox', label: 'Fortnox', icon: <TagsOutlined /> },
+  { key: 'quote-builder', label: 'Quote Builder', icon: <FileTextOutlined /> },
 ]
 
 export function NavigationPanel({
@@ -39,19 +40,21 @@ export function NavigationPanel({
       </div>
 
       <nav className="nav-menu" aria-label="Primary">
-        {navigationItems.map((item) => (
-          <button
-            aria-current={activeView === item.key ? 'page' : undefined}
-            className={`nav-item${activeView === item.key ? ' is-active' : ''}`}
-            key={item.key}
-            onClick={() => onNavigate(item.key)}
-            title={isCollapsed ? item.label : undefined}
-            type="button"
-          >
-            <span className="nav-item-icon" aria-hidden="true">{item.icon}</span>
-            <span className="nav-item-label">{item.label}</span>
-          </button>
-        ))}
+        {navigationItems.map((item) => {
+          return (
+            <button
+              aria-current={item.key === activeView ? 'page' : undefined}
+              className={`nav-item${item.key === activeView ? ' is-active' : ''}`}
+              key={item.key}
+              onClick={() => onNavigate(item.key)}
+              title={isCollapsed ? item.label : undefined}
+              type="button"
+            >
+              <span className="nav-item-icon" aria-hidden="true">{item.icon}</span>
+              <span className="nav-item-label">{item.label}</span>
+            </button>
+          )
+        })}
       </nav>
     </Sider>
   )

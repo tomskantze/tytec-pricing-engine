@@ -1,4 +1,5 @@
 import type { Customer, ImportResult } from '../domain/types'
+import { importAkamaiRows } from './akamaiReport'
 import { parseDelimited } from './csv'
 import { importB612Rows } from './b612Report'
 import { importTelesolRows } from './telesolReport'
@@ -21,10 +22,38 @@ function isB612Format(headers: string[]) {
   ].every((header) => values.has(header))
 }
 
+function isAkamaiFormat(headers: string[]) {
+  const values = headerSet(headers)
+  const legacy = [
+    'externalkey',
+    'customerticket',
+    'servicedate',
+    'site',
+    'technician',
+    'reghours',
+    'obh1hours',
+    'note',
+    'updatedat',
+  ].every((header) => values.has(header))
+  const invoiced = [
+    'invoicenumber',
+    'servicedate',
+    'timeperiod',
+    'technician',
+    'ratebucket',
+    'ratetype',
+    'hours',
+    'site',
+    'note',
+    'updatedat',
+  ].every((header) => values.has(header))
+  return legacy || invoiced
+}
+
 function parseRows(customer: Customer, rows: Record<string, string>[], headers: string[], sheetName?: string): ImportResult {
-  return isB612Format(headers)
-    ? importB612Rows(customer, rows, headers, sheetName)
-    : importTelesolRows(rows, headers, sheetName)
+  if (isAkamaiFormat(headers)) return importAkamaiRows(customer, rows, headers, sheetName)
+  if (isB612Format(headers)) return importB612Rows(customer, rows, headers, sheetName)
+  return importTelesolRows(rows, headers, sheetName)
 }
 
 export async function importCustomerReportFile(customer: Customer, file: File): Promise<ImportResult> {
