@@ -56,6 +56,39 @@
   margin-top: 10px;
 }
 
+.review-stored-notes-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.review-sow-copy {
+  height: 96px;
+  min-height: 88px;
+  resize: vertical;
+  overflow: auto;
+}
+
+.pricing-explanation-panel {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.pricing-explanation-list {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--erp-text);
+  font-size: 12px;
+}
+
+.pricing-explanation-list li + li {
+  margin-top: 4px;
+}
+
+.pricing-explanation-emphasis {
+  font-weight: 700;
+}
+
 @media (max-width: 1100px) {
   .review-page-body,
   .review-info-grid,

@@ -1,8 +1,9 @@
 import { Card } from 'antd'
 import { getFortnoxArticleNumber } from '../../domain/fortnoxArticles'
 import type { FortnoxArticleMap, FortnoxLineKind } from '../../domain/fortnoxArticles'
-import type { Customer, LocationCard, ShiftRate } from '../../domain/types'
 import { formatAmount } from '../../domain/money'
+import { getRateCardMode, showsFullShift } from '../../domain/rateCards'
+import type { Customer, LocationCard, ShiftRate } from '../../domain/types'
 import { ErpDataTable } from '../../design-system/ErpDataTable'
 import type { ErpTableColumn } from '../../design-system/ErpDataTable'
 
@@ -11,16 +12,24 @@ type LocationRow = {
   location: LocationCard
 }
 
-type ShiftRow = {
+type RateRow = {
   key: string
   shift: ShiftRate
   shiftLabel: string
-  callOutAmount: string
-  callOutArticleKind?: FortnoxLineKind
+  primaryAmount: string
+  primaryArticleKind?: FortnoxLineKind
   includes: string
-  additionalAmount: string
-  additionalArticleKind?: FortnoxLineKind
+  secondaryAmount: string
+  secondaryArticleKind?: FortnoxLineKind
   location: LocationCard
+}
+
+type TierRateRow = {
+  key: string
+  tier: string
+  shiftLabel: string
+  rateType: string
+  hourlyRate: string
 }
 
 function locationLabel(location: LocationCard) {
@@ -29,6 +38,7 @@ function locationLabel(location: LocationCard) {
 
 const locationColumns: ErpTableColumn<LocationRow>[] = [
   { title: 'Location', render: (_, row) => locationLabel(row.location), erpSize: 'text' },
+  { title: 'Site Aliases', render: (_, row) => row.location.siteAliases?.join(', ') || '-', erpSize: 'text' },
   { title: 'Currency', render: (_, row) => row.location.currency || '-', erpSize: 'compact' },
   { title: 'Metro', render: (_, row) => row.location.cityCode || '-', erpSize: 'compact' },
   {
@@ -44,7 +54,7 @@ const locationColumns: ErpTableColumn<LocationRow>[] = [
 ]
 
 function fortnoxArticle(
-  row: ShiftRow,
+  row: RateRow,
   kind: FortnoxLineKind | undefined,
   fortnoxArticles: FortnoxArticleMap,
 ) {
@@ -57,72 +67,144 @@ function fullShiftLabel(shift: ShiftRate) {
   return shift.shift === '08:00-18:00' ? 'Full day' : 'Full night'
 }
 
-function getShiftColumns(fortnoxArticles: FortnoxArticleMap): ErpTableColumn<ShiftRow>[] {
+function timeWindowColumns(fortnoxArticles: FortnoxArticleMap): ErpTableColumn<RateRow>[] {
   return [
     { title: 'Shift', dataIndex: 'shiftLabel', width: 118 },
-    { title: 'Call-out / Full', dataIndex: 'callOutAmount', width: 112 },
+    { title: 'Call-out / Full', dataIndex: 'primaryAmount', width: 112 },
     {
       title: 'Fortnox Article',
-      render: (_, row) => fortnoxArticle(row, row.callOutArticleKind, fortnoxArticles),
+      render: (_, row) => fortnoxArticle(row, row.primaryArticleKind, fortnoxArticles),
       width: 104,
     },
     { title: 'Includes', dataIndex: 'includes', width: 78 },
-    { title: 'Additional Hour', dataIndex: 'additionalAmount', width: 118 },
+    { title: 'Additional Hour', dataIndex: 'secondaryAmount', width: 118 },
     {
       title: 'Fortnox Article',
-      render: (_, row) => fortnoxArticle(row, row.additionalArticleKind, fortnoxArticles),
+      render: (_, row) => fortnoxArticle(row, row.secondaryArticleKind, fortnoxArticles),
       width: 104,
     },
   ]
 }
 
-function getRateRows(location: LocationCard): ShiftRow[] {
+function categoryColumns(fortnoxArticles: FortnoxArticleMap): ErpTableColumn<RateRow>[] {
+  return [
+    { title: 'Rate Label', dataIndex: 'shiftLabel', width: 136 },
+    { title: 'Hourly Rate', dataIndex: 'primaryAmount', width: 136 },
+    {
+      title: 'Fortnox Article',
+      render: (_, row) => fortnoxArticle(row, row.primaryArticleKind, fortnoxArticles),
+      width: 136,
+    },
+  ]
+}
+
+function tierRateColumns(): ErpTableColumn<TierRateRow>[] {
+  return [
+    { title: 'Tier', dataIndex: 'tier', width: 120 },
+    { title: 'Rate Label', dataIndex: 'shiftLabel', width: 136 },
+    { title: 'Rate Type', dataIndex: 'rateType', width: 116 },
+    { title: 'Hourly Rate', dataIndex: 'hourlyRate', width: 136 },
+  ]
+}
+
+function getRateRows(location: LocationCard): RateRow[] {
+  if (getRateCardMode(location) === 'category') {
+    return location.shifts.map((shift) => ({
+      key: `${location.id}-${shift.shift}`,
+      shift,
+      shiftLabel: shift.shift,
+      primaryAmount: formatAmount(location.currency, shift.additionalHours),
+      primaryArticleKind: 'additionalHour',
+      includes: '-',
+      secondaryAmount: '-',
+      secondaryArticleKind: undefined,
+      location,
+    }))
+  }
   const standardRows = location.shifts.map((shift) => ({
     key: `${location.id}-${shift.shift}`,
     shift,
     shiftLabel: shift.shift,
-    callOutAmount: formatAmount(location.currency, shift.callOutFee),
-    callOutArticleKind: 'callOut' as const,
+    primaryAmount: formatAmount(location.currency, shift.callOutFee),
+    primaryArticleKind: 'callOut' as const,
     includes: `${shift.includedHours.toFixed(2)} hrs`,
-    additionalAmount: formatAmount(location.currency, shift.additionalHours),
-    additionalArticleKind: 'additionalHour' as const,
+    secondaryAmount: formatAmount(location.currency, shift.additionalHours),
+    secondaryArticleKind: 'additionalHour' as const,
     location,
   }))
-  return [
-    ...standardRows,
-    ...location.shifts.filter((shift) => shift.shift !== 'Weekend / Holiday').map((shift) => ({
+  const fullRows = location.shifts
+    .filter((shift) => showsFullShift(shift.shift))
+    .map((shift) => ({
       key: `${location.id}-${shift.shift}-full`,
       shift,
       shiftLabel: fullShiftLabel(shift),
-      callOutAmount: formatAmount(location.currency, shift.fullShiftRate),
-      callOutArticleKind: 'fullShift' as const,
+      primaryAmount: formatAmount(location.currency, shift.fullShiftRate),
+      primaryArticleKind: 'fullShift' as const,
       includes: '-',
-      additionalAmount: '-',
-      additionalArticleKind: undefined,
+      secondaryAmount: '-',
+      secondaryArticleKind: undefined,
       location,
-    })),
-  ]
+    }))
+  return [...standardRows, ...fullRows]
 }
 
 function LocationFocusPanel({
+  customer,
   fortnoxArticles,
   location,
 }: {
+  customer: Customer
   fortnoxArticles: FortnoxArticleMap
   location: LocationCard
 }) {
+  const mode = getRateCardMode(location)
   const rows = getRateRows(location)
+  const akamaiCategory = customer.customerKey === 'AKAM' && mode === 'category'
+  const tierRows: TierRateRow[] = (location.tierRates || []).length
+    ? (location.tierRates || [])
+        .slice()
+        .sort((left, right) =>
+          `${left.tier}-${left.shift}-${left.rateType}`.localeCompare(
+            `${right.tier}-${right.shift}-${right.rateType}`,
+          ),
+        )
+        .map((rate, index) => ({
+          key: `${location.id}-${rate.tier}-${rate.shift}-${rate.rateType}-${index}`,
+          tier: rate.tier,
+          shiftLabel: rate.shift,
+          rateType: rate.shift === 'OBH1' ? rate.rateType : '-',
+          hourlyRate: formatAmount(location.currency, rate.rate),
+        }))
+    : []
 
   return (
     <Card className="section-card section-card-compact" variant="borderless">
-      <ErpDataTable<ShiftRow>
-        className="nested-table rate-card-detail-table"
-        columnSizing="manual"
-        columns={getShiftColumns(fortnoxArticles)}
-        dataSource={rows}
-        rowKey="key"
-        scroll={{ x: 634 }}
-      />
+      {akamaiCategory || (mode === 'category' && tierRows.length) ? (
+        <ErpDataTable<TierRateRow>
+          className="nested-table rate-card-detail-table"
+          columnSizing="manual"
+          columns={tierRateColumns()}
+          dataSource={tierRows}
+          pagination={false}
+          rowKey="key"
+          scroll={{ x: 664 }}
+        />
+      ) : (
+        <ErpDataTable<RateRow>
+          className="nested-table rate-card-detail-table"
+          columnSizing="manual"
+          columns={mode === 'category' ? categoryColumns(fortnoxArticles) : timeWindowColumns(fortnoxArticles)}
+          dataSource={rows}
+          rowKey="key"
+          scroll={{ x: mode === 'category' ? 408 : 634 }}
+        />
+      )}
+      {location.siteAliases?.length ? (
+        <div className="info-field info-field-spaced">
+          <span>Site Aliases</span>
+          <strong>{location.siteAliases.join(', ')}</strong>
+        </div>
+      ) : null}
       {location.slaNote ? (
         <div className="info-field info-field-spaced">
           <span>SLA Note</span>
@@ -169,10 +251,7 @@ export function RateCardsTable({
       expandable={{
         expandedRowKeys: expandedLocationKeys,
         expandedRowRender: (row) => (
-          <LocationFocusPanel
-            fortnoxArticles={fortnoxArticles}
-            location={row.location}
-          />
+          <LocationFocusPanel customer={customer} fortnoxArticles={fortnoxArticles} location={row.location} />
         ),
         expandIcon: () => null,
         showExpandColumn: false,

@@ -42,7 +42,7 @@ export function InvoiceBatchTable({
       columnSizing="manual"
       columns={columns}
       dataSource={batches}
-      locale={{ emptyText: 'Upload a customer report and Jira report to calculate invoice batches.' }}
+      locale={{ emptyText: 'Upload a customer report to calculate invoice batches.' }}
       onRow={(batch) => ({ onClick: () => onSelectBatch(batch.batch) })}
       rowClassName={(batch) => (batch.batch === selectedBatch ? 'selected-row' : '')}
       rowKey="batch"

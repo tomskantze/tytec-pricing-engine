@@ -129,6 +129,7 @@ export function CustomersModule({
         width={760}
       >
         <CustomerLocationDrawer
+          customerKey={customer.customerKey}
           key={`${locationDrawerMode ?? 'closed'}-${selectedLocation?.id ?? 'new'}`}
           location={locationDrawerMode === 'edit' ? selectedLocation : null}
           mode={locationDrawerMode ?? 'add'}

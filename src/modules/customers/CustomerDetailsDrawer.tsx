@@ -27,6 +27,9 @@ function makeCustomer(values: CustomerFormValues, customer: Customer | null): Cu
     financeEmail: values.financeEmail?.trim() || '',
     customerLegalId: values.customerLegalId?.trim() || '',
     locationCards: customer?.locationCards ?? [],
+    technicians: customer?.technicians ?? [],
+    technicianRates: customer?.technicianRates ?? [],
+    technicianTierAssignments: customer?.technicianTierAssignments ?? [],
   }
 }
 

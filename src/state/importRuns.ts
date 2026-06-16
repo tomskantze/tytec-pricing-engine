@@ -54,6 +54,11 @@ function updateRun(state: AppState, runId: string, updater: (run: ImportRun) => 
   }
 }
 
+export function updateImportRun(state: AppState, runId: string, updater: (run: ImportRun) => ImportRun): AppState {
+  const run = state.importRuns.find((item) => item.id === runId)
+  return run ? updateRun(state, runId, (current) => mergeRun(updater(current))) : state
+}
+
 export function createImportRun(customerKey: string, label = 'New Invoice', invoiceMonth?: number, invoiceYear?: number): ImportRun {
   const timestamp = now()
   return {
@@ -149,19 +154,40 @@ function withWritableRun(state: AppState, customerKey: string, updater: (run: Im
   return { ...state, selectedInvoiceCustomerKey: customerKey, activeImportRunId: run.id, importRuns: [run, ...state.importRuns] }
 }
 
-export function setCustomerReportOnRun(state: AppState, customerKey: string, result: ImportResult, file: File): AppState {
-  const document = createRunDocument('customer-report', file)
+export function setCustomerReportOnRun(
+  state: AppState,
+  customerKey: string,
+  result: ImportResult,
+  document: RunDocumentMeta,
+): AppState {
   return withWritableRun(state, customerKey, (run) => ({
     ...run,
-    label: run.label === 'New Invoice' ? runLabel(result.jobs, result.sheetName || file.name) : run.label,
+    label: run.label === 'New Invoice' ? runLabel(result.jobs, result.sheetName || document.fileName) : run.label,
     customerJobs: result.jobs,
     customerReportHeaders: result.headers ?? [],
-    customerReportFileName: file.name,
+    customerReportFileName: document.fileName,
     customerReportSheetName: result.sheetName ?? '',
     customerWarnings: result.warnings,
     jobReviewOverrides: {},
     selectedBatch: '',
     documents: replaceDocument(run.documents, document),
+  }))
+}
+
+export function setImportedJobsOnRun(
+  state: AppState,
+  customerKey: string,
+  result: ImportResult,
+): AppState {
+  return withWritableRun(state, customerKey, (run) => ({
+    ...run,
+    customerJobs: result.jobs,
+    customerReportHeaders: result.headers ?? [],
+    customerReportFileName: '',
+    customerReportSheetName: result.sheetName ?? '',
+    customerWarnings: result.warnings,
+    jobReviewOverrides: {},
+    selectedBatch: '',
   }))
 }
 
@@ -174,6 +200,30 @@ export function setJiraReportOnRun(state: AppState, customerKey: string, result:
     jiraFileName: file.name,
     jiraWarnings: result.warnings,
     selectedBatch: '',
+    documents: replaceDocument(run.documents, document),
+  }))
+}
+
+export function setJiraReportDocumentOnRun(
+  state: AppState,
+  customerKey: string,
+  result: JiraImportResult,
+  document: RunDocumentMeta,
+): AppState {
+  return withWritableRun(state, customerKey, (run) => ({
+    ...run,
+    label: run.label === 'New Invoice' && !run.customerJobs.length ? runLabel([], document.fileName) : run.label,
+    jiraIssues: result.issues,
+    jiraFileName: document.fileName,
+    jiraWarnings: result.warnings,
+    selectedBatch: '',
+    documents: replaceDocument(run.documents, document),
+  }))
+}
+
+export function attachRunDocument(state: AppState, customerKey: string, document: RunDocumentMeta): AppState {
+  return withWritableRun(state, customerKey, (run) => ({
+    ...run,
     documents: replaceDocument(run.documents, document),
   }))
 }
@@ -209,7 +259,8 @@ export function saveRunReviewOverride(state: AppState, jobId: string, override: 
     override.manualConsumablesAmount,
     override.manualFinalAmount,
   ].some((value) => value != null)
-  if (override && (override.approved || override.forceReview || override.treatAsLocationId || hasAmounts || override.note)) {
+  const hasRateSelection = override && Boolean(override.manualRateLabel || override.manualRateType)
+  if (override && (override.approved || override.forceReview || override.treatAsLocationId || hasRateSelection || hasAmounts || override.note)) {
     nextOverrides[jobId] = override
   }
   else delete nextOverrides[jobId]

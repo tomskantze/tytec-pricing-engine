@@ -1,39 +1,54 @@
-import { CheckSquareOutlined, LeftOutlined, TableOutlined, TeamOutlined } from '@ant-design/icons'
+import { CheckSquareOutlined, FileAddOutlined, LeftOutlined, TableOutlined, TeamOutlined } from '@ant-design/icons'
 import { Button } from 'antd'
 import type { ReactNode } from 'react'
 import { PageHeader } from '../../design-system/PageHeader'
 import type { Customer } from '../../domain/types'
 import type { CustomerWorkspaceTab } from '../../state/appState'
 
-function workspaceContext(tab: CustomerWorkspaceTab, invoiceLabel: string) {
-  if (tab === 'invoices') return invoiceLabel ? `Invoices / ${invoiceLabel}` : 'Invoices'
+function workspaceContext(customer: Customer, tab: CustomerWorkspaceTab, invoiceLabel: string) {
+  if (tab === 'invoices') {
+    const label = customer.customerKey === 'AKAM' ? 'Settlements' : 'Invoices'
+    return invoiceLabel ? `${label} / ${invoiceLabel}` : label
+  }
+  if (tab === 'create-job') return 'Create Job'
   if (tab === 'review-queue') return 'Review Queue'
-  return 'Overview'
+  if (tab === 'technicians') return 'Technicians'
+  return 'Rate Cards'
 }
 
 export function CustomerWorkspaceModule({
   customer,
   activeTab,
   activeInvoiceLabel,
+  showCreateJob = true,
+  showTechnicians = false,
   onBackToCustomers,
   onSelectTab,
   overviewContent,
+  createJobContent,
   invoicesContent,
   reviewQueueContent,
+  techniciansContent,
 }: {
   customer: Customer
   activeTab: CustomerWorkspaceTab
   activeInvoiceLabel: string
+  showCreateJob?: boolean
+  showTechnicians?: boolean
   onBackToCustomers: () => void
   onSelectTab: (tab: CustomerWorkspaceTab) => void
   overviewContent: ReactNode
+  createJobContent: ReactNode
   invoicesContent: ReactNode
   reviewQueueContent: ReactNode
+  techniciansContent: ReactNode
 }) {
   const tabs: Array<{ key: CustomerWorkspaceTab; label: string; icon: ReactNode }> = [
-    { key: 'overview', label: 'Overview', icon: <TeamOutlined /> },
-    { key: 'invoices', label: 'Invoices', icon: <TableOutlined /> },
+    ...(showCreateJob ? [{ key: 'create-job' as const, label: 'Create Job', icon: <FileAddOutlined /> }] : []),
+    { key: 'invoices', label: customer.customerKey === 'AKAM' ? 'Settlements' : 'Invoices', icon: <TableOutlined /> },
     { key: 'review-queue', label: 'Review Queue', icon: <CheckSquareOutlined /> },
+    { key: 'overview', label: 'Rate Cards', icon: <TeamOutlined /> },
+    ...(showTechnicians ? [{ key: 'technicians' as const, label: 'Technicians', icon: <TeamOutlined /> }] : []),
   ]
 
   return (
@@ -62,12 +77,14 @@ export function CustomerWorkspaceModule({
       </div>
       <div className="customer-workspace-header">
         <PageHeader
-          title={`${customer.name} - ${workspaceContext(activeTab, activeInvoiceLabel)}`}
+          title={`${customer.name} - ${workspaceContext(customer, activeTab, activeInvoiceLabel)}`}
         />
       </div>
       {activeTab === 'overview' ? overviewContent : null}
+      {activeTab === 'create-job' ? createJobContent : null}
       {activeTab === 'invoices' ? invoicesContent : null}
       {activeTab === 'review-queue' ? reviewQueueContent : null}
+      {activeTab === 'technicians' ? techniciansContent : null}
     </>
   )
 }

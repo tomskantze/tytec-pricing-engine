@@ -62,6 +62,22 @@
 .erp-table .ant-table-expanded-row > td {
   padding: 10px !important;
   background: #fbfaf8 !important;
+  position: relative;
+  z-index: 1;
+}
+
+.erp-table .ant-table-expanded-row .erp-data-table {
+  margin-top: 6px;
+}
+
+.invoice-expanded-table {
+  padding-top: 8px;
+  position: relative;
+  z-index: 1;
+}
+
+.invoice-expanded-editor {
+  padding-top: 4px;
 }
 
 .erp-table .table-article-input.ant-input,
@@ -119,6 +135,15 @@
 .info-field-spaced {
   margin-top: 8px;
   padding: 7px 9px;
+}
+
+.tier-rate-groups {
+  display: grid;
+  gap: 8px;
+}
+
+.tier-rate-group + .tier-rate-group {
+  margin-top: 2px;
 }
 
 .erp-status-badge {
