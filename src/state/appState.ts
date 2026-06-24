@@ -8,8 +8,8 @@ import type { SavedQuote } from "../modules/fortnox/quoteTypes";
 import { repairCreatedJobFromRaw } from "../modules/create-job/createJobParser";
 import { normalizeQuote } from "./quoteState";
 
-export type ActiveView = "customers" | "fortnox" | "quote-builder";
-export type CustomerWorkspaceTab = "overview" | "create-job" | "invoices" | "review-queue" | "technicians";
+export type ActiveView = "home" | "customers" | "fortnox" | "quote-builder";
+export type CustomerWorkspaceTab = "profile" | "rate-cards" | "create-job" | "invoices" | "review-queue" | "technicians"; export type QuoteBuilderTab = "builder" | "saved";
 
 export type AppState = {
   activeView: ActiveView;
@@ -20,6 +20,7 @@ export type AppState = {
   selectedFortnoxCustomerKey: string;
   quotes: SavedQuote[];
   customerWorkspaceTab: CustomerWorkspaceTab;
+  quoteBuilderTab: QuoteBuilderTab;
   importRuns: ImportRun[];
   activeImportRunId: string;
   customerJobs: JobInput[];
@@ -72,18 +73,18 @@ export type ImportRun = {
   documents: RunDocumentMeta[];
 };
 
-const storageKey = "tytec-pricing-engine:v1";
-const telesolSlaEntity = "Telesol IT B.V.";
+const storageKey = "tytec-pricing-engine:v1"; const telesolSlaEntity = "Telesol IT B.V.";
 
 export const initialState: AppState = {
-  activeView: "customers",
+  activeView: "home",
   customers: defaultTelesolCustomers,
   fortnoxArticles: defaultFortnoxArticles,
   selectedCustomerKey: "",
   selectedInvoiceCustomerKey: "",
   selectedFortnoxCustomerKey: "",
   quotes: [],
-  customerWorkspaceTab: "overview",
+  customerWorkspaceTab: "profile",
+  quoteBuilderTab: "builder",
   importRuns: [],
   activeImportRunId: "",
   customerJobs: [],
@@ -101,9 +102,7 @@ export const initialState: AppState = {
   warnings: [],
 };
 
-type PersistedState = Partial<AppState> & {
-  customer?: Customer;
-};
+type PersistedState = Partial<AppState> & { customer?: Customer };
 
 function normalizeRun(run: Partial<ImportRun>, customerKey: string): ImportRun {
   const timestamp = run.createdAt || new Date().toISOString();
@@ -230,6 +229,7 @@ export function hydrateState(parsed: PersistedState): AppState {
   const customers = getPersistedCustomers(parsed);
   const legacy = legacyRun(parsed);
   const rawActiveView = String(parsed.activeView || "");
+  const rawCustomerWorkspaceTab = String(parsed.customerWorkspaceTab || "");
   const selectedCustomerKey = parsed.selectedCustomerKey || "";
   const selectedInvoiceCustomerKey = parsed.selectedInvoiceCustomerKey || selectedCustomerKey || "";
   const customerJobs = ensureUniqueJobIds(Array.isArray(parsed.customerJobs) ? parsed.customerJobs : Array.isArray(parsed.jobs) ? parsed.jobs : []);
@@ -246,7 +246,8 @@ export function hydrateState(parsed: PersistedState): AppState {
       activeView:
         parsed.activeView === "fortnox" ? "fortnox"
         : parsed.activeView === "quote-builder" ? "quote-builder"
-        : "customers",
+        : parsed.activeView === "customers" ? "customers"
+        : "home",
       customers,
       fortnoxArticles: withFortnoxArticleDefaults(parsed.fortnoxArticles),
       selectedCustomerKey,
@@ -256,11 +257,14 @@ export function hydrateState(parsed: PersistedState): AppState {
       customerWorkspaceTab:
         rawActiveView === "review-queue" ? "review-queue"
         : rawActiveView === "invoice-prep" ? "invoices"
-        : parsed.customerWorkspaceTab === "review-queue" ? "review-queue"
-        : parsed.customerWorkspaceTab === "invoices" ? "invoices"
-        : parsed.customerWorkspaceTab === "create-job" ? "create-job"
-        : parsed.customerWorkspaceTab === "technicians" ? "technicians"
-        : "overview",
+        : rawCustomerWorkspaceTab === "review-queue" ? "review-queue"
+        : rawCustomerWorkspaceTab === "invoices" ? "invoices"
+        : rawCustomerWorkspaceTab === "create-job" ? "create-job"
+        : rawCustomerWorkspaceTab === "technicians" ? "technicians"
+        : rawCustomerWorkspaceTab === "overview" || rawCustomerWorkspaceTab === "rate-cards" ? "rate-cards"
+        : rawCustomerWorkspaceTab === "profile" ? "profile"
+        : "profile",
+      quoteBuilderTab: parsed.quoteBuilderTab === "saved" ? "saved" : "builder",
       importRuns,
       activeImportRunId,
       customerJobs,
@@ -286,14 +290,10 @@ export function loadState(): AppState {
 }
 
 export function saveState(state: AppState): void {
-  const persisted: AppState = {
-    ...state,
-    activeView: state.activeView,
-  };
+  const persisted: AppState = { ...state, activeView: state.activeView };
   window.localStorage.setItem(storageKey, JSON.stringify(persisted));
 }
 
 export function clearSavedState(): AppState {
-  window.localStorage.removeItem(storageKey);
-  return { ...initialState };
+  window.localStorage.removeItem(storageKey); return { ...initialState };
 }

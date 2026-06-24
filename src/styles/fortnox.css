@@ -191,6 +191,13 @@
   grid-column: 1 / -1;
 }
 
+.fortnox-quote-tariff-row {
+  grid-template-columns: minmax(120px, 1.1fr) repeat(5, minmax(0, 1fr));
+}
+
+.fortnox-quote-tariff-window { display: grid; gap: 4px; align-content: center; }
+.fortnox-quote-tariff-window strong { color: var(--erp-text); font-size: 12px; }
+
 .fortnox-quote-actions {
   display: flex;
   justify-content: flex-end;
@@ -246,6 +253,12 @@
 .fortnox-quote-form .ant-segmented-item-label {
   white-space: normal;
 }
+
+.fortnox-quote-doc-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.fortnox-quote-doc-table th, .fortnox-quote-doc-table td { padding: 8px 16px 8px 0; border-bottom: 1px solid var(--erp-border-soft); font-size: 12px; text-align: left; vertical-align: top; font-variant-numeric: tabular-nums; }
+.fortnox-quote-doc-table th { color: var(--erp-muted); font-size: 12px; font-weight: 600; letter-spacing: 0; text-transform: none; }
+.fortnox-quote-doc-table th:nth-child(n + 2), .fortnox-quote-doc-table td:nth-child(n + 2) { text-align: right; }
+.fortnox-quote-doc-table th:last-child, .fortnox-quote-doc-table td:last-child { padding-right: 0; }
 
 @media (max-width: 620px) {
   .fortnox-location-head,

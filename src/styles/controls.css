@@ -136,27 +136,26 @@
 .toolbar-row,
 .invoice-detail-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
   margin-bottom: 9px;
 }
 
-.toolbar-search {
-  width: min(470px, 100%);
+.toolbar-row > :last-child,
+.invoice-detail-head > :last-child {
+  margin-left: auto;
 }
 
-.run-control-row {
-  margin-top: 8px;
+.toolbar-row > .ant-space,
+.invoice-detail-head > .ant-space {
+  justify-content: flex-end;
 }
 
-.run-select {
-  width: min(380px, 100%);
-}
-
-.run-name-input {
-  width: min(260px, 100%);
-}
+.toolbar-search { width: min(470px, 100%); }
+.run-control-row { margin-top: 8px; }
+.run-select { width: min(380px, 100%); }
+.run-name-input { width: min(260px, 100%); }
 
 .toolbar-count {
   color: var(--erp-muted);
@@ -282,6 +281,11 @@
   .toolbar-row {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .toolbar-row > :last-child,
+  .invoice-detail-head > :last-child {
+    margin-left: 0;
   }
 
   .shift-remove-item .ant-form-item-label {

@@ -37,9 +37,10 @@ export function SavedQuotesPanel({
                   <span className="fortnox-saved-quote-ref">{quote.quoteRef}</span>
                 </div>
                 <div className="fortnox-saved-quote-meta">
+                  <span>{quote.customerName}</span>
                   <span>{formatAmount(quote.currency, quote.grandTotal)}</span>
                   <span>{new Date(quote.updatedAt).toLocaleDateString()}</span>
-                  <span>{quote.customerPdf?.storedPath ? 'PDF stored' : 'Draft only'}</span>
+                  <span>{quote.customerPdf?.storedPath ? 'PDF ready' : 'Needs resave'}</span>
                 </div>
               </div>
               <div className="fortnox-quote-actions fortnox-quote-actions-inline">
@@ -49,7 +50,7 @@ export function SavedQuotesPanel({
                   onClick={() => setPreviewQuoteId(quote.id)}
                   size="small"
                 >
-                  View PDF
+                  Open PDF
                 </Button>
                 <Button
                   disabled={!quote.customerPdf?.storedPath}
@@ -72,13 +73,14 @@ export function SavedQuotesPanel({
         </div>
       ) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} />}
       <Modal
+        destroyOnClose
         footer={null}
         onCancel={() => setPreviewQuoteId('')}
         open={Boolean(previewQuote?.customerPdf?.storedPath)}
         title={previewQuote ? `${previewQuote.quoteRef} · ${previewQuote.quoteName}` : 'Saved Quote'}
         width={980}
       >
-        {previewQuote?.customerPdf?.storedPath ? <PdfDocumentPreview storedPath={previewQuote.customerPdf.storedPath} /> : null}
+        {previewQuote?.customerPdf?.storedPath ? <PdfDocumentPreview key={`${previewQuote.customerPdf.storedPath}:${previewQuote.customerPdf.exportedAt || ''}`} storedPath={previewQuote.customerPdf.storedPath} /> : null}
       </Modal>
     </section>
   )

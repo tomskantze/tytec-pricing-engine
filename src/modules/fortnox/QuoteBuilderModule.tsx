@@ -39,6 +39,7 @@ type RatePreset = {
   kind: 'hourly' | 'full-day'
   rate: number
   callOutFee: number
+  includedHours: number
 }
 type SummaryLine = { label: string; amount: number }
 
@@ -62,6 +63,7 @@ function buildRatePresets(location?: LocationCard | null): RatePreset[] {
       kind: 'hourly' as const,
       rate: shift.additionalHours,
       callOutFee: shift.callOutFee,
+      includedHours: shift.includedHours,
     }))
   const fullDay = location.shifts
     .filter((shift) => showsFullShift(shift.shift) && shift.fullShiftRate > 0)
@@ -72,6 +74,7 @@ function buildRatePresets(location?: LocationCard | null): RatePreset[] {
       kind: 'full-day' as const,
       rate: shift.fullShiftRate,
       callOutFee: shift.callOutFee,
+      includedHours: shift.includedHours,
     }))
   return [...hourly, ...fullDay]
 }
@@ -215,24 +218,27 @@ function uniqueQuoteRef(baseRef: string, quoteId: string, quotes: SavedQuote[]) 
 
 export function QuoteBuilderModule({
   customer,
+  onBackToLaunch,
   onDeleteQuote,
   onQuoteLoaded,
   onSaveQuote,
   requestedQuoteId,
   savedQuotes,
+  startMode = 'draft',
 }: {
   customer: Customer | null
+  onBackToLaunch?: () => void
   onDeleteQuote: (quoteId: string) => void
   onQuoteLoaded?: (quoteId: string) => void
   onSaveQuote: (quote: SavedQuote) => void
   requestedQuoteId?: string
   savedQuotes: SavedQuote[]
+  startMode?: 'draft' | 'new'
 }) {
   const activeCustomer = customer ?? null
   const customerQuotes = useMemo(
     () => savedQuotes
-      .filter((quote) => !activeCustomer || quote.customerKey === activeCustomer.customerKey)
-      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)),
+      .filter((quote) => !activeCustomer || quote.customerKey === activeCustomer.customerKey),
     [activeCustomer, savedQuotes],
   )
   const customerDefaults = useMemo(
@@ -256,18 +262,29 @@ export function QuoteBuilderModule({
   const [technicianCount, setTechnicianCount] = useState<number | null>(1)
   const [workDays, setWorkDays] = useState<number | null>(1)
   const [hoursPerDay, setHoursPerDay] = useState<number | null>(4)
+  const [obhHours, setObhHours] = useState<number | null>(0)
+  const [obhMultiplier, setObhMultiplier] = useState<number | null>(1.5)
+  const [weekendHours, setWeekendHours] = useState<number | null>(0)
+  const [weekendMultiplier, setWeekendMultiplier] = useState<number | null>(2)
   const [billingModel, setBillingModel] = useState<QuoteBillingModel>('hourly')
   const [rateSource, setRateSource] = useState<QuoteRateSource>('preset')
   const [rateCardLocationId, setRateCardLocationId] = useState(customerDefaults.rateCardLocationId)
   const [presetRateId, setPresetRateId] = useState('')
   const [manualRate, setManualRate] = useState<number | null>(null)
   const [manualCallOutFee, setManualCallOutFee] = useState<number | null>(null)
+  const [manualObhCallOutFee, setManualObhCallOutFee] = useState<number | null>(null)
+  const [manualWeekendCallOutFee, setManualWeekendCallOutFee] = useState<number | null>(null)
+  const [manualIncludedHours, setManualIncludedHours] = useState<number | null>(null)
+  const [manualObhIncludedHours, setManualObhIncludedHours] = useState<number | null>(null)
+  const [manualWeekendIncludedHours, setManualWeekendIncludedHours] = useState<number | null>(null)
+  const [laborCustomerNote, setLaborCustomerNote] = useState('')
   const [fixedFee, setFixedFee] = useState<number | null>(null)
   const [techCostSource, setTechCostSource] = useState<QuoteTechCostSource>('manual')
   const [technicianCostId, setTechnicianCostId] = useState('')
   const [manualTechPayRate, setManualTechPayRate] = useState<number | null>(null)
   const [travelRequired, setTravelRequired] = useState(true)
   const [travelGroups, setTravelGroups] = useState<QuoteTravelGroup[]>([createTravelGroup(1)])
+  const [travelCustomerNote, setTravelCustomerNote] = useState('')
   const [consumables, setConsumables] = useState<number | null>(0)
   const [consumablesNote, setConsumablesNote] = useState('')
   const [equipmentLabel, setEquipmentLabel] = useState('')
@@ -275,6 +292,7 @@ export function QuoteBuilderModule({
   const [equipmentRate, setEquipmentRate] = useState<number | null>(0)
   const [equipmentNote, setEquipmentNote] = useState('')
   const [extraItems, setExtraItems] = useState<QuoteExtraItem[]>([])
+  const [extrasCustomerNote, setExtrasCustomerNote] = useState('')
   const [markupPercent, setMarkupPercent] = useState<number | null>(0)
   const [discountPercent, setDiscountPercent] = useState<number | null>(0)
   const [contingencyPercent, setContingencyPercent] = useState<number | null>(0)
@@ -306,6 +324,10 @@ export function QuoteBuilderModule({
     () => (activeCustomer ? resolveSavedTechnicianRate(activeCustomer, selectedRateCardLocation, technicianCostId) : null),
     [activeCustomer, selectedRateCardLocation, technicianCostId],
   )
+  const activeSavedQuote = useMemo(
+    () => customerQuotes.find((quote) => quote.id === activeQuoteId) ?? null,
+    [activeQuoteId, customerQuotes],
+  )
 
   useEffect(() => {
     if (!activeCustomer) return
@@ -316,14 +338,13 @@ export function QuoteBuilderModule({
       customerKey: activeCustomer.customerKey,
       quoteRef: nextQuoteRefForCustomer(activeCustomer.customerKey, customerQuotes),
     }
-    const storedSession = loadQuoteDraftSession(activeCustomer.customerKey, defaults)
-    if (storedSession) {
-      applyDraft(storedSession.draft, storedSession.activeQuoteId, storedSession.step)
-    } else {
+    const storedSession = startMode === 'draft' ? loadQuoteDraftSession(activeCustomer.customerKey, defaults) : null
+    if (storedSession) applyDraft(storedSession.draft, storedSession.activeQuoteId, storedSession.step)
+    else {
       applyDraft(createQuoteDraftDefaults(defaults), '', 0)
     }
     setDraftReady(true)
-  }, [activeCustomer?.customerKey, customerQuotes])
+  }, [activeCustomer?.customerKey, startMode])
 
   useEffect(() => {
     if (!requestedQuoteId) return
@@ -334,14 +355,19 @@ export function QuoteBuilderModule({
   }, [customerQuotes, onQuoteLoaded, requestedQuoteId])
 
   useEffect(() => {
-    if (rateSource === 'preset' && selectedRateCardLocation?.currency) setCurrency(selectedRateCardLocation.currency)
-  }, [rateSource, selectedRateCardLocation])
-
-  useEffect(() => {
     if (deliveryMode === 'Remote') {
       setTravelRequired(false)
     }
   }, [deliveryMode])
+
+  useEffect(() => {
+    if (serviceType !== 'Break-fix' && serviceType !== 'BAU') return
+    if (technicianCount !== 1) setTechnicianCount(1)
+    if (workDays !== 1) setWorkDays(1)
+    if (hoursPerDay !== 0) setHoursPerDay(0)
+    if (obhHours !== 0) setObhHours(0)
+    if (weekendHours !== 0) setWeekendHours(0)
+  }, [serviceType, technicianCount, workDays, hoursPerDay, obhHours, weekendHours])
 
   useEffect(() => {
     if (!selectedPreset && visiblePresets[0]) setPresetRateId(visiblePresets[0].id)
@@ -350,14 +376,59 @@ export function QuoteBuilderModule({
     }
   }, [selectedPreset, visiblePresets])
 
-  const technicians = technicianCount || 0
-  const days = workDays || 0
+  const isSingleTechQuote = serviceType === 'Break-fix' || serviceType === 'BAU'
+  const isSupportTariffQuote = isSingleTechQuote && (billingModel === 'hourly' || billingModel === 'callout-hourly')
+  const technicians = isSingleTechQuote ? 1 : (technicianCount || 0)
+  const days = isSingleTechQuote ? 1 : (workDays || 0)
   const dayHours = hoursPerDay || 0
-  const laborHours = technicians * days * dayHours
+  const standardLaborHours = isSupportTariffQuote ? 0 : technicians * days * dayHours
+  const obhLaborHours = isSupportTariffQuote ? 0 : (obhHours || 0)
+  const weekendLaborHours = isSupportTariffQuote ? 0 : (weekendHours || 0)
+  const laborHours = standardLaborHours + obhLaborHours + weekendLaborHours
   const resolvedRate = rateSource === 'manual' ? (manualRate || 0) : (selectedPreset?.rate || 0)
   const resolvedCallOut = billingModel === 'callout-hourly'
-    ? (rateSource === 'manual' ? (manualCallOutFee || 0) : (selectedPreset?.callOutFee || 0))
+    ? (manualCallOutFee ?? (rateSource === 'preset' ? (selectedPreset?.callOutFee || 0) : 0))
     : 0
+  const resolvedObhCallOut = billingModel === 'callout-hourly'
+    ? (manualObhCallOutFee ?? resolvedCallOut)
+    : 0
+  const resolvedWeekendCallOut = billingModel === 'callout-hourly'
+    ? (manualWeekendCallOutFee ?? resolvedCallOut)
+    : 0
+  const resolvedIncludedHours = billingModel === 'callout-hourly'
+    ? (manualIncludedHours ?? (rateSource === 'preset' ? (selectedPreset?.includedHours || 0) : 0))
+    : 0
+  const resolvedObhIncludedHours = billingModel === 'callout-hourly'
+    ? (manualObhIncludedHours || 0)
+    : 0
+  const resolvedWeekendIncludedHours = billingModel === 'callout-hourly'
+    ? (manualWeekendIncludedHours || 0)
+    : 0
+  const resolvedObhMultiplier = obhMultiplier || 1
+  const resolvedWeekendMultiplier = weekendMultiplier || 1
+  const obhPreviewRate = roundMoney(resolvedRate * resolvedObhMultiplier)
+  const weekendPreviewRate = roundMoney(resolvedRate * resolvedWeekendMultiplier)
+  const dayCallOutMultiplier = resolvedRate > 0 && resolvedCallOut > 0 ? roundMoney(resolvedCallOut / resolvedRate) : 3
+  const obhCallOutMultiplier = obhPreviewRate > 0 && resolvedObhCallOut > 0 ? roundMoney(resolvedObhCallOut / obhPreviewRate) : 3
+  const weekendCallOutMultiplier = weekendPreviewRate > 0 && resolvedWeekendCallOut > 0 ? roundMoney(resolvedWeekendCallOut / weekendPreviewRate) : 3
+  const calloutVisits = billingModel === 'callout-hourly' && technicians > 0 ? technicians * Math.max(days, 1) : 0
+  const includedStandardHours = billingModel === 'callout-hourly' ? calloutVisits * resolvedIncludedHours : 0
+  const includedObhHours = billingModel === 'callout-hourly' ? calloutVisits * resolvedObhIncludedHours : 0
+  const includedWeekendHours = billingModel === 'callout-hourly' ? calloutVisits * resolvedWeekendIncludedHours : 0
+  const billableStandardHours = billingModel === 'callout-hourly'
+    ? Math.max(0, standardLaborHours - includedStandardHours)
+    : standardLaborHours
+  const billableObhHours = billingModel === 'callout-hourly'
+    ? Math.max(0, obhLaborHours - includedObhHours)
+    : obhLaborHours
+  const billableWeekendHours = billingModel === 'callout-hourly'
+    ? Math.max(0, weekendLaborHours - includedWeekendHours)
+    : weekendLaborHours
+  const standardLaborAmount = roundMoney(billableStandardHours * resolvedRate)
+  const obhLaborAmount = roundMoney(billableObhHours * resolvedRate * resolvedObhMultiplier)
+  const weekendLaborAmount = roundMoney(billableWeekendHours * resolvedRate * resolvedWeekendMultiplier)
+  const calloutMinimumAmount = roundMoney(calloutVisits * resolvedCallOut)
+  const billableStandardAmount = roundMoney(billableStandardHours * resolvedRate)
   const hasTechCostBasis = techCostSource === 'saved' ? savedTechPayRate != null : manualTechPayRate != null
   const resolvedTechPayRate = hasTechCostBasis
     ? (techCostSource === 'saved' ? (savedTechPayRate || 0) : (manualTechPayRate || 0))
@@ -366,9 +437,27 @@ export function QuoteBuilderModule({
   const laborSubtotal = useMemo(() => {
     if (billingModel === 'fixed-fee') return fixedFee || 0
     if (billingModel === 'full-day') return technicians * days * resolvedRate
-    const hourlyAmount = laborHours * resolvedRate
-    return billingModel === 'callout-hourly' ? hourlyAmount + (technicians * days * resolvedCallOut) : hourlyAmount
-  }, [billingModel, days, fixedFee, laborHours, resolvedCallOut, resolvedRate, technicians])
+    if (isSupportTariffQuote) {
+      if (billingModel === 'callout-hourly') return roundMoney(calloutMinimumAmount)
+      return 0
+    }
+    if (billingModel === 'callout-hourly') {
+      return roundMoney(calloutMinimumAmount + billableStandardAmount + obhLaborAmount + weekendLaborAmount)
+    }
+    return roundMoney(standardLaborAmount + obhLaborAmount + weekendLaborAmount)
+  }, [
+    billableStandardAmount,
+    billingModel,
+    calloutMinimumAmount,
+    days,
+    fixedFee,
+    isSupportTariffQuote,
+    obhLaborAmount,
+    resolvedRate,
+    technicians,
+    weekendLaborAmount,
+    standardLaborAmount,
+  ])
   const estimatedLaborTechCost = roundMoney(laborHours * resolvedTechPayRate)
 
   const travelLineItems = useMemo(() => {
@@ -436,7 +525,20 @@ export function QuoteBuilderModule({
 
   const summaryLines = useMemo(() => (
     [
-      line(billingModel === 'fixed-fee' ? 'Fixed fee labor' : 'Labor', laborSubtotal),
+      isSupportTariffQuote
+        ? billingModel === 'callout-hourly'
+          ? line('Call-out minimum', laborSubtotal)
+          : null
+        : billingModel === 'fixed-fee'
+        ? line('Fixed fee labor', laborSubtotal)
+        : billingModel === 'full-day'
+          ? line('Full-day labor', laborSubtotal)
+          : billingModel === 'callout-hourly'
+            ? line('Call-out minimum', calloutMinimumAmount)
+            : line('Standard labor', standardLaborAmount),
+      !isSupportTariffQuote && billingModel === 'callout-hourly' && billableStandardAmount > 0 ? line('Additional standard labor', billableStandardAmount) : null,
+      !isSupportTariffQuote && billingModel !== 'fixed-fee' && billingModel !== 'full-day' && obhLaborAmount > 0 ? line(`OBH labor x${resolvedObhMultiplier.toFixed(2)}`, obhLaborAmount) : null,
+      !isSupportTariffQuote && billingModel !== 'fixed-fee' && billingModel !== 'full-day' && weekendLaborAmount > 0 ? line(`Weekend labor x${resolvedWeekendMultiplier.toFixed(2)}`, weekendLaborAmount) : null,
       ...travelLineItems,
       line(consumablesNote.trim() || 'Consumables', consumablesSubtotal),
       line(equipmentLabel.trim() || 'Equipment rental', equipmentSubtotal),
@@ -445,7 +547,27 @@ export function QuoteBuilderModule({
       line('Risk buffer', contingencyAmount),
       discountAmount > 0 ? { label: 'Discount', amount: -discountAmount } : null,
     ].filter(Boolean) as SummaryLine[]
-  ), [billingModel, contingencyAmount, consumablesNote, consumablesSubtotal, discountAmount, equipmentLabel, equipmentSubtotal, extraItemLines, laborSubtotal, markupAmount, travelLineItems])
+  ), [
+    billableStandardAmount,
+    billingModel,
+    calloutMinimumAmount,
+    contingencyAmount,
+    consumablesNote,
+    consumablesSubtotal,
+    discountAmount,
+    equipmentLabel,
+    equipmentSubtotal,
+    extraItemLines,
+    isSupportTariffQuote,
+    laborSubtotal,
+    markupAmount,
+    obhLaborAmount,
+    resolvedObhMultiplier,
+    resolvedWeekendMultiplier,
+    standardLaborAmount,
+    travelLineItems,
+    weekendLaborAmount,
+  ])
 
   const detailSummary = useMemo(() => {
     const travelDetails = travelRequired ? travelGroups.map((group) => {
@@ -477,22 +599,56 @@ export function QuoteBuilderModule({
     { label: 'Delivery mode', value: deliveryMode },
     { label: 'Quote currency', value: currency },
   ]
+  const usesHourlyBuckets = billingModel === 'hourly' || billingModel === 'callout-hourly'
+  const customerLaborTariffRows = isSupportTariffQuote ? [
+    {
+      window: '08:00-18:00',
+      hourlyRate: formatAmount(currency, resolvedRate),
+      callOut: billingModel === 'callout-hourly' ? formatAmount(currency, resolvedCallOut) : '-',
+      includedHours: billingModel === 'callout-hourly' ? `${resolvedIncludedHours.toFixed(2)} h` : '-',
+    },
+    {
+      window: '18:00-08:00',
+      hourlyRate: formatAmount(currency, obhPreviewRate),
+      callOut: billingModel === 'callout-hourly' ? formatAmount(currency, resolvedObhCallOut) : '-',
+      includedHours: billingModel === 'callout-hourly' ? `${resolvedObhIncludedHours.toFixed(2)} h` : '-',
+    },
+    {
+      window: 'Weekend',
+      hourlyRate: formatAmount(currency, weekendPreviewRate),
+      callOut: billingModel === 'callout-hourly' ? formatAmount(currency, resolvedWeekendCallOut) : '-',
+      includedHours: billingModel === 'callout-hourly' ? `${resolvedWeekendIncludedHours.toFixed(2)} h` : '-',
+    },
+  ] : []
   const customerLaborDetails = [
     `Technicians: ${technicians}`,
-    `Work days: ${days}`,
-    `Hours per day: ${dayHours.toFixed(2)}`,
-    `Labor hours: ${laborHours.toFixed(2)}`,
-    `Billing model: ${billingModel}`,
+    isSupportTariffQuote ? 'Coverage model: single technician call-out tariff' : '',
+    isSupportTariffQuote ? `Tariff shape: ${billingModel === 'callout-hourly' ? 'Call-out + hourly' : 'Hourly'}` : '',
+    isSupportTariffQuote
+      ? `Rate basis: ${rateSource === 'manual' ? 'Manual rate' : `${selectedRateCardLocation ? getLocationLabel(selectedRateCardLocation) : '-'} · ${selectedPreset?.label || 'Unselected'}`}`
+      : '',
+    !usesHourlyBuckets ? `Work days: ${days}` : '',
+    !usesHourlyBuckets && !isSingleTechQuote ? `Hours per day: ${dayHours.toFixed(2)}` : '',
+    !isSupportTariffQuote && usesHourlyBuckets
+      ? billingModel === 'callout-hourly'
+        ? `Standard hours: ${standardLaborHours.toFixed(2)}`
+        : `Standard hours: ${standardLaborHours.toFixed(2)} · ${formatAmount(currency, standardLaborAmount)}`
+      : '',
+    !isSupportTariffQuote && billingModel === 'callout-hourly' ? `Included standard hours: ${includedStandardHours.toFixed(2)} · additional standard billed: ${billableStandardHours.toFixed(2)} h` : '',
+    !isSupportTariffQuote && usesHourlyBuckets && obhLaborHours > 0 ? `OBH hours: ${obhLaborHours.toFixed(2)} · included ${includedObhHours.toFixed(2)} · billed ${billableObhHours.toFixed(2)} @ ${formatAmount(currency, resolvedRate)} x ${resolvedObhMultiplier.toFixed(2)} = ${formatAmount(currency, obhLaborAmount)}` : '',
+    !isSupportTariffQuote && usesHourlyBuckets && weekendLaborHours > 0 ? `Weekend hours: ${weekendLaborHours.toFixed(2)} · included ${includedWeekendHours.toFixed(2)} · billed ${billableWeekendHours.toFixed(2)} @ ${formatAmount(currency, resolvedRate)} x ${resolvedWeekendMultiplier.toFixed(2)} = ${formatAmount(currency, weekendLaborAmount)}` : '',
+    !isSupportTariffQuote && usesHourlyBuckets ? `Total labor hours: ${laborHours.toFixed(2)}` : '',
+    !isSupportTariffQuote ? `Billing model: ${billingModel}` : '',
     billingModel === 'fixed-fee'
       ? `Fixed fee: ${formatAmount(currency, fixedFee || 0)}`
-      : `Rate basis: ${rateSource === 'manual' ? 'Manual rate' : `${selectedRateCardLocation ? getLocationLabel(selectedRateCardLocation) : '-'} · ${selectedPreset?.label || 'Unselected'}`}`,
-    billingModel !== 'fixed-fee'
+      : !isSupportTariffQuote ? `Rate basis: ${rateSource === 'manual' ? 'Manual rate' : `${selectedRateCardLocation ? getLocationLabel(selectedRateCardLocation) : '-'} · ${selectedPreset?.label || 'Unselected'}`}` : '',
+    !isSupportTariffQuote && billingModel !== 'fixed-fee'
       ? `Selected rate: ${formatAmount(currency, resolvedRate)}`
       : '',
-    billingModel === 'callout-hourly'
-      ? `Call-out fee: ${formatAmount(currency, resolvedCallOut)}`
+    !isSupportTariffQuote && billingModel === 'callout-hourly'
+      ? `Minimum charge: ${formatAmount(currency, resolvedCallOut)} · applies ${calloutVisits}x · includes ${resolvedIncludedHours.toFixed(2)} h each`
       : '',
-    `Labor subtotal: ${formatAmount(currency, laborSubtotal)}`,
+    isSupportTariffQuote && billingModel === 'hourly' ? '' : `Labor subtotal: ${formatAmount(currency, laborSubtotal)}`,
   ].filter(Boolean)
   const customerTravelGroups = travelRequired
     ? travelGroups.map((group) => ({
@@ -530,18 +686,29 @@ export function QuoteBuilderModule({
       technicianCount,
       workDays,
       hoursPerDay,
+      obhHours,
+      obhMultiplier,
+      weekendHours,
+      weekendMultiplier,
       billingModel,
       rateSource,
       rateCardLocationId,
       presetRateId,
       manualRate,
       manualCallOutFee,
+      manualObhCallOutFee,
+      manualWeekendCallOutFee,
+      manualIncludedHours,
+      manualObhIncludedHours,
+      manualWeekendIncludedHours,
+      laborCustomerNote,
       fixedFee,
       techCostSource,
       technicianCostId,
       manualTechPayRate,
       travelRequired,
       travelGroups,
+      travelCustomerNote,
       consumables,
       consumablesNote,
       equipmentLabel,
@@ -549,6 +716,7 @@ export function QuoteBuilderModule({
       equipmentRate,
       equipmentNote,
       extraItems,
+      extrasCustomerNote,
       otherCostLabel: '',
       otherCost: 0,
       otherCostNote: '',
@@ -572,18 +740,29 @@ export function QuoteBuilderModule({
     setTechnicianCount(draft.technicianCount)
     setWorkDays(draft.workDays)
     setHoursPerDay(draft.hoursPerDay)
+    setObhHours(draft.obhHours)
+    setObhMultiplier(draft.obhMultiplier)
+    setWeekendHours(draft.weekendHours)
+    setWeekendMultiplier(draft.weekendMultiplier)
     setBillingModel(draft.billingModel)
     setRateSource(draft.rateSource)
     setRateCardLocationId(draft.rateCardLocationId)
     setPresetRateId(draft.presetRateId)
     setManualRate(draft.manualRate)
     setManualCallOutFee(draft.manualCallOutFee)
+    setManualObhCallOutFee(draft.manualObhCallOutFee)
+    setManualWeekendCallOutFee(draft.manualWeekendCallOutFee)
+    setManualIncludedHours(draft.manualIncludedHours)
+    setManualObhIncludedHours(draft.manualObhIncludedHours)
+    setManualWeekendIncludedHours(draft.manualWeekendIncludedHours)
+    setLaborCustomerNote(draft.laborCustomerNote)
     setFixedFee(draft.fixedFee)
     setTechCostSource(draft.techCostSource)
     setTechnicianCostId(draft.technicianCostId)
     setManualTechPayRate(draft.manualTechPayRate)
     setTravelRequired(draft.travelRequired)
     setTravelGroups(draft.travelGroups.length ? draft.travelGroups : [createTravelGroup(1)])
+    setTravelCustomerNote(draft.travelCustomerNote)
     setConsumables(draft.consumables)
     setConsumablesNote(draft.consumablesNote)
     setEquipmentLabel(draft.equipmentLabel)
@@ -591,6 +770,7 @@ export function QuoteBuilderModule({
     setEquipmentRate(draft.equipmentRate)
     setEquipmentNote(draft.equipmentNote)
     setExtraItems(draft.extraItems || [])
+    setExtrasCustomerNote(draft.extrasCustomerNote)
     setMarkupPercent(draft.markupPercent)
     setDiscountPercent(draft.discountPercent)
     setContingencyPercent(draft.contingencyPercent)
@@ -607,6 +787,22 @@ export function QuoteBuilderModule({
     }), '', 0)
   }
 
+  function handleRateSourceChange(nextRateSource: QuoteRateSource) {
+    setRateSource(nextRateSource)
+    if (nextRateSource === 'preset' && selectedRateCardLocation?.currency && !currency.trim()) {
+      setCurrency(selectedRateCardLocation.currency)
+    }
+  }
+
+  function handleRateCardLocationChange(nextLocationId: string) {
+    const nextLocation = activeCustomer?.locationCards.find((location) => location.id === nextLocationId) ?? null
+    const currentPresetCurrency = selectedRateCardLocation?.currency || ''
+    setRateCardLocationId(nextLocationId)
+    if (rateSource === 'preset' && nextLocation?.currency && (!currency.trim() || currency === currentPresetCurrency)) {
+      setCurrency(nextLocation.currency)
+    }
+  }
+
   function buildSavedQuote(overrides?: Partial<SavedQuote>): SavedQuote | null {
     if (!activeCustomer) return null
     const now = new Date().toISOString()
@@ -616,52 +812,46 @@ export function QuoteBuilderModule({
     return {
       id: quoteId,
       customerKey: activeCustomer.customerKey,
+      customerName: activeCustomer.name,
       quoteRef: nextQuoteRef,
       quoteName: quoteName.trim() || 'Untitled Quote',
       currency,
       grandTotal,
       updatedAt: now,
-      customerPdf: overrides?.customerPdf,
+      customerPdf: overrides?.customerPdf ?? activeSavedQuote?.customerPdf,
       draft: captureDraft(),
       ...overrides,
     }
   }
 
-  function saveCurrentQuote() {
-    const nextQuote = buildSavedQuote()
-    if (!nextQuote) return
-    onSaveQuote(nextQuote)
-    setActiveQuoteId(nextQuote.id)
-    setQuoteRef(nextQuote.quoteRef)
-  }
-
-  async function exportCustomerQuotePdf() {
-    const nextQuote = buildSavedQuote()
-    if (!nextQuote) return
-    const html = customerQuoteHtml()
-    const safeName = safeDocumentName(nextQuote.quoteRef || nextQuote.quoteName || 'Quote')
+  async function persistInternalCustomerPdf(nextQuote: SavedQuote) {
     const api = desktopWindow()
-    if (!api?.savePdfFromHtml) {
-      downloadText(`${safeName}.html`, 'text/html;charset=utf-8', html)
-      return
-    }
+    if (!api?.savePdfFromHtml) return nextQuote
+    const safeName = safeDocumentName(nextQuote.quoteRef || nextQuote.quoteName || 'Quote')
     const savedPdf = await api.savePdfFromHtml({
       id: `quote-pdf-${nextQuote.id}`,
       fileName: `${safeName}.pdf`,
-      html,
+      html: customerQuoteHtml(),
     })
-    const exportedQuote: SavedQuote = {
+    if (!savedPdf.storedPath) return nextQuote
+    return {
       ...nextQuote,
-      customerPdf: savedPdf.storedPath ? {
+      customerPdf: {
         fileName: `${safeName}.pdf`,
         previewUrl: savedPdf.previewUrl || undefined,
         storedPath: savedPdf.storedPath || undefined,
         exportedAt: new Date().toISOString(),
-      } : undefined,
+      },
     }
-    onSaveQuote(exportedQuote)
-    setActiveQuoteId(exportedQuote.id)
-    setQuoteRef(exportedQuote.quoteRef)
+  }
+
+  async function saveCurrentQuote() {
+    let nextQuote = buildSavedQuote()
+    if (!nextQuote) return
+    nextQuote = await persistInternalCustomerPdf(nextQuote)
+    onSaveQuote(nextQuote)
+    setActiveQuoteId(nextQuote.id)
+    setQuoteRef(nextQuote.quoteRef)
   }
 
   function customerQuoteHtml() {
@@ -682,8 +872,12 @@ export function QuoteBuilderModule({
       assumptions,
       basics: customerDocumentBasics,
       laborDetails: customerLaborDetails,
+      laborTariffRows: customerLaborTariffRows,
+      laborNote: laborCustomerNote,
       travelGroups: customerTravelGroups,
+      travelNote: travelCustomerNote,
       extras: customerExtras,
+      extrasNote: extrasCustomerNote,
       summaryLines: summaryLines.map((entry) => ({ label: entry.label, amount: formatAmount(currency, entry.amount) })),
       total: formatAmount(currency, grandTotal),
     })
@@ -701,6 +895,15 @@ export function QuoteBuilderModule({
     if (!api?.savePdfAsFromHtml) {
       downloadText(`${safeName}.html`, 'text/html;charset=utf-8', customerQuoteHtml())
       return
+    }
+    if (activeQuoteId) {
+      const nextQuote = buildSavedQuote()
+      if (nextQuote) {
+        const updatedQuote = await persistInternalCustomerPdf(nextQuote)
+        onSaveQuote(updatedQuote)
+        setActiveQuoteId(updatedQuote.id)
+        setQuoteRef(updatedQuote.quoteRef)
+      }
     }
     await api.savePdfAsFromHtml({
       fileName: `${safeName}.pdf`,
@@ -741,6 +944,7 @@ export function QuoteBuilderModule({
   const draftSnapshot = useMemo(
     () => captureDraft(),
     [
+      quoteRef,
       quoteName,
       workLocation,
       currency,
@@ -749,18 +953,29 @@ export function QuoteBuilderModule({
       technicianCount,
       workDays,
       hoursPerDay,
+      obhHours,
+      obhMultiplier,
+      weekendHours,
+      weekendMultiplier,
       billingModel,
       rateSource,
       rateCardLocationId,
       presetRateId,
       manualRate,
       manualCallOutFee,
+      manualObhCallOutFee,
+      manualWeekendCallOutFee,
+      manualIncludedHours,
+      manualObhIncludedHours,
+      manualWeekendIncludedHours,
+      laborCustomerNote,
       fixedFee,
       techCostSource,
       technicianCostId,
       manualTechPayRate,
       travelRequired,
       travelGroups,
+      travelCustomerNote,
       consumables,
       consumablesNote,
       equipmentLabel,
@@ -768,6 +983,7 @@ export function QuoteBuilderModule({
       equipmentRate,
       equipmentNote,
       extraItems,
+      extrasCustomerNote,
       markupPercent,
       discountPercent,
       contingencyPercent,
@@ -793,9 +1009,9 @@ export function QuoteBuilderModule({
         <section className="fortnox-quote-panel">
           <div className="fortnox-quote-library fortnox-quote-actions-only">
             <div className="fortnox-quote-actions fortnox-quote-actions-inline">
+              {onBackToLaunch ? <Button onClick={onBackToLaunch}>Quote Home</Button> : null}
               <Button onClick={resetDraft}>New Quote</Button>
-              <Button onClick={saveCurrentQuote} type="primary">Save Quote</Button>
-              <Button onClick={() => { void exportCustomerQuotePdf() }}>Store PDF</Button>
+              <Button onClick={() => { void saveCurrentQuote() }} type="primary">Save Quote</Button>
               <Button onClick={() => { void saveCustomerQuotePdfAs() }}>Save PDF As...</Button>
               <Button onClick={() => { void printCustomerQuote() }}>Print Quote</Button>
               {activeQuoteId ? (
@@ -833,26 +1049,83 @@ export function QuoteBuilderModule({
               <label><span>Currency</span><Select onChange={setCurrency} options={['SEK', 'EUR', 'NOK', 'DKK', 'USD', 'GBP'].map((value) => ({ value, label: value }))} value={currency} /></label>
               <label className="fortnox-quote-fit-control"><span>Delivery mode</span><Segmented onChange={(value) => setDeliveryMode(value as QuoteDeliveryMode)} options={['Onsite', 'Remote', 'Mixed']} value={deliveryMode} /></label>
               <label><span>Service type</span><Select onChange={setServiceType} options={['BAU', 'Break-fix', 'Survey', 'IMAC', 'Install', 'Project work', 'Standby support'].map((value) => ({ value, label: value }))} value={serviceType} /></label>
-              <label><span>Technicians</span><InputNumber min={1} onChange={(value) => setTechnicianCount(numberValue(value))} value={technicianCount} /></label>
-              <label><span>Work days</span><InputNumber min={0} onChange={(value) => setWorkDays(numberValue(value))} value={workDays} /></label>
-              <label><span>Hours per day</span><InputNumber min={0} onChange={(value) => setHoursPerDay(numberValue(value))} value={hoursPerDay} /></label>
+              {!isSingleTechQuote ? (
+                <>
+                  <label><span>Technicians</span><InputNumber min={1} onChange={(value) => setTechnicianCount(numberValue(value))} value={technicianCount} /></label>
+                  <label><span>Work days</span><InputNumber min={0} onChange={(value) => setWorkDays(numberValue(value))} value={workDays} /></label>
+                  <label><span>Hours per day</span><InputNumber min={0} onChange={(value) => setHoursPerDay(numberValue(value))} value={hoursPerDay} /></label>
+                </>
+              ) : null}
               <label className="fortnox-quote-form-span-2"><span>Scope Summary</span><TextArea onChange={(event) => setSummaryText(event.target.value)} placeholder="Describe the planned work, deliverables, customer environment, and any special handling." rows={5} value={summaryText} /></label>
             </div>
           ) : null}
 
           {step === 1 ? (
             <div className="fortnox-quote-form">
-              {billingModel !== 'fixed-fee' ? <label className="fortnox-quote-fit-control"><span>Rate source</span><Segmented onChange={(value) => setRateSource(value as QuoteRateSource)} options={[{ value: 'preset', label: 'Saved rate card' }, { value: 'manual', label: 'Manual' }]} value={rateSource} /></label> : null}
+              {billingModel !== 'fixed-fee' ? <label className="fortnox-quote-fit-control"><span>Rate source</span><Segmented onChange={(value) => handleRateSourceChange(value as QuoteRateSource)} options={[{ value: 'preset', label: 'Saved rate card' }, { value: 'manual', label: 'Manual' }]} value={rateSource} /></label> : null}
               <label className="fortnox-quote-fit-control"><span>Billing model</span><Segmented onChange={(value) => setBillingModel(value as QuoteBillingModel)} options={[{ value: 'hourly', label: 'Hourly' }, { value: 'callout-hourly', label: 'Call-out + Hourly' }, { value: 'full-day', label: 'Full day' }, { value: 'fixed-fee', label: 'Fixed fee' }]} value={billingModel} /></label>
               {billingModel === 'fixed-fee' ? <label><span>Fixed fee</span><InputNumber min={0} onChange={(value) => setFixedFee(numberValue(value))} precision={2} value={fixedFee} /></label> : null}
               {billingModel !== 'fixed-fee' && rateSource === 'preset' ? (
                 <>
-                  <label><span>Rate card location</span><Select onChange={setRateCardLocationId} options={activeCustomer.locationCards.map((location) => ({ value: location.id, label: getLocationLabel(location) }))} value={selectedRateCardLocation?.id} /></label>
-                  <label><span>Rate preset</span><Select onChange={setPresetRateId} options={visiblePresets.map((preset) => ({ value: preset.id, label: `${preset.label} · ${formatAmount(currency, preset.rate)}` }))} value={selectedPreset?.id} /></label>
+                  <label><span>Rate card location</span><Select onChange={handleRateCardLocationChange} options={activeCustomer.locationCards.map((location) => ({ value: location.id, label: getLocationLabel(location) }))} value={selectedRateCardLocation?.id} /></label>
+                  <label><span>Rate preset</span><Select onChange={setPresetRateId} options={visiblePresets.map((preset) => ({ value: preset.id, label: `${preset.label} · ${formatAmount(currency, preset.rate)}${billingModel === 'callout-hourly' && preset.includedHours > 0 ? ` · incl. ${preset.includedHours} h` : ''}` }))} value={selectedPreset?.id} /></label>
                 </>
               ) : null}
-              {billingModel !== 'fixed-fee' && rateSource === 'manual' ? <label><span>{billingModel === 'full-day' ? 'Manual day rate' : 'Manual hourly rate'}</span><InputNumber min={0} onChange={(value) => setManualRate(numberValue(value))} precision={2} value={manualRate} /></label> : null}
-              {billingModel === 'callout-hourly' && rateSource === 'manual' ? <label><span>Manual call-out fee</span><InputNumber min={0} onChange={(value) => setManualCallOutFee(numberValue(value))} precision={2} value={manualCallOutFee} /></label> : null}
+              {!isSupportTariffQuote && billingModel !== 'fixed-fee' && rateSource === 'manual' ? <label><span>{billingModel === 'full-day' ? 'Manual day rate' : 'Manual hourly rate'}</span><InputNumber min={0} onChange={(value) => setManualRate(numberValue(value))} precision={2} value={manualRate} /></label> : null}
+              {!isSupportTariffQuote && billingModel === 'callout-hourly' && rateSource === 'manual' ? <label><span>Minimum charge</span><InputNumber min={0} onChange={(value) => setManualCallOutFee(numberValue(value))} precision={2} value={manualCallOutFee} /></label> : null}
+              {!isSupportTariffQuote && billingModel === 'callout-hourly' ? <label><span>Included hours</span><InputNumber disabled={rateSource !== 'manual'} min={0} onChange={(value) => setManualIncludedHours(numberValue(value))} precision={2} value={rateSource === 'manual' ? manualIncludedHours : resolvedIncludedHours} /></label> : null}
+              {!isSupportTariffQuote && (billingModel === 'hourly' || billingModel === 'callout-hourly') ? <label><span>Standard hours</span><InputNumber min={0} onChange={(value) => setHoursPerDay(numberValue(value))} precision={2} value={hoursPerDay} /></label> : null}
+              {isSupportTariffQuote ? (
+                <>
+                  <div className="fortnox-quote-form fortnox-quote-form-span-2 fortnox-quote-tariff-row">
+                    <div className="fortnox-quote-tariff-window"><span>Window</span><strong>08:00-18:00</strong></div>
+                    <label><span>Multiplier</span><InputNumber disabled precision={2} value={1} /></label>
+                    <label><span>Hourly rate</span><InputNumber disabled={rateSource === 'preset'} min={0} onChange={(value) => setManualRate(numberValue(value))} precision={2} value={rateSource === 'manual' ? manualRate : resolvedRate} /></label>
+                    <label><span>Call-out x</span><InputNumber disabled={billingModel !== 'callout-hourly'} min={0} onChange={(value) => {
+                      const next = numberValue(value)
+                      setManualCallOutFee(next == null ? null : roundMoney(resolvedRate * next))
+                    }} precision={2} step={0.25} value={billingModel === 'callout-hourly' ? dayCallOutMultiplier : null} /></label>
+                    <label><span>Minimum charge</span><InputNumber disabled precision={2} value={billingModel === 'callout-hourly' ? resolvedCallOut : null} /></label>
+                    <label><span>Included hours</span><InputNumber disabled={billingModel !== 'callout-hourly'} min={0} onChange={(value) => setManualIncludedHours(numberValue(value))} precision={2} value={billingModel === 'callout-hourly' ? resolvedIncludedHours : null} /></label>
+                  </div>
+                  <div className="fortnox-quote-form fortnox-quote-form-span-2 fortnox-quote-tariff-row">
+                    <div className="fortnox-quote-tariff-window"><span>Window</span><strong>18:00-08:00</strong></div>
+                    <label><span>Multiplier</span><InputNumber min={1} onChange={(value) => setObhMultiplier(numberValue(value))} precision={2} step={0.25} value={obhMultiplier} /></label>
+                    <label><span>Hourly rate</span><InputNumber disabled precision={2} value={obhPreviewRate} /></label>
+                    <label><span>Call-out x</span><InputNumber disabled={billingModel !== 'callout-hourly'} min={0} onChange={(value) => {
+                      const next = numberValue(value)
+                      setManualObhCallOutFee(next == null ? null : roundMoney(obhPreviewRate * next))
+                    }} precision={2} step={0.25} value={billingModel === 'callout-hourly' ? obhCallOutMultiplier : null} /></label>
+                    <label><span>Minimum charge</span><InputNumber disabled precision={2} value={billingModel === 'callout-hourly' ? resolvedObhCallOut : null} /></label>
+                    <label><span>Included hours</span><InputNumber disabled={billingModel !== 'callout-hourly'} min={0} onChange={(value) => setManualObhIncludedHours(numberValue(value))} precision={2} value={billingModel === 'callout-hourly' ? resolvedObhIncludedHours : null} /></label>
+                  </div>
+                  <div className="fortnox-quote-form fortnox-quote-form-span-2 fortnox-quote-tariff-row">
+                    <div className="fortnox-quote-tariff-window"><span>Window</span><strong>Weekend</strong></div>
+                    <label><span>Multiplier</span><InputNumber min={1} onChange={(value) => setWeekendMultiplier(numberValue(value))} precision={2} step={0.25} value={weekendMultiplier} /></label>
+                    <label><span>Hourly rate</span><InputNumber disabled precision={2} value={weekendPreviewRate} /></label>
+                    <label><span>Call-out x</span><InputNumber disabled={billingModel !== 'callout-hourly'} min={0} onChange={(value) => {
+                      const next = numberValue(value)
+                      setManualWeekendCallOutFee(next == null ? null : roundMoney(weekendPreviewRate * next))
+                    }} precision={2} step={0.25} value={billingModel === 'callout-hourly' ? weekendCallOutMultiplier : null} /></label>
+                    <label><span>Minimum charge</span><InputNumber disabled precision={2} value={billingModel === 'callout-hourly' ? resolvedWeekendCallOut : null} /></label>
+                    <label><span>Included hours</span><InputNumber disabled={billingModel !== 'callout-hourly'} min={0} onChange={(value) => setManualWeekendIncludedHours(numberValue(value))} precision={2} value={billingModel === 'callout-hourly' ? resolvedWeekendIncludedHours : null} /></label>
+                  </div>
+                </>
+              ) : billingModel === 'hourly' || billingModel === 'callout-hourly' ? (
+                <>
+                  <div className="fortnox-quote-form fortnox-quote-form-span-2">
+                    <label><span>OBH hours</span><InputNumber min={0} onChange={(value) => setObhHours(numberValue(value))} precision={2} value={obhHours} /></label>
+                    <label><span>OBH multiplier</span><InputNumber min={1} onChange={(value) => setObhMultiplier(numberValue(value))} precision={2} step={0.25} value={obhMultiplier} /></label>
+                  </div>
+                  {billingModel === 'callout-hourly' ? <label><span>OBH included hours</span><InputNumber min={0} onChange={(value) => setManualObhIncludedHours(numberValue(value))} precision={2} value={manualObhIncludedHours} /></label> : null}
+                  <div className="fortnox-quote-form fortnox-quote-form-span-2">
+                    <label><span>Weekend hours</span><InputNumber min={0} onChange={(value) => setWeekendHours(numberValue(value))} precision={2} value={weekendHours} /></label>
+                    <label><span>Weekend multiplier</span><InputNumber min={1} onChange={(value) => setWeekendMultiplier(numberValue(value))} precision={2} step={0.25} value={weekendMultiplier} /></label>
+                  </div>
+                  {billingModel === 'callout-hourly' ? <label><span>Weekend included hours</span><InputNumber min={0} onChange={(value) => setManualWeekendIncludedHours(numberValue(value))} precision={2} value={manualWeekendIncludedHours} /></label> : null}
+                </>
+              ) : null}
+              <label className="fortnox-quote-form-span-2"><span>Labor notes to customer</span><TextArea onChange={(event) => setLaborCustomerNote(event.target.value)} placeholder="Optional customer-facing labor note, such as response assumptions, included handling, or coverage window." rows={3} value={laborCustomerNote} /></label>
               {billingModel !== 'fixed-fee' && rateSource === 'preset' && !visiblePresets.length ? <Alert message="No matching saved rates found for this billing model. Switch to Manual or pick another rate card location." type="warning" /> : null}
             </div>
           ) : null}
@@ -923,6 +1196,7 @@ export function QuoteBuilderModule({
                   </div>
                 </>
               ) : null}
+              <label className="fortnox-quote-form-span-2"><span>Travel notes to customer</span><TextArea onChange={(event) => setTravelCustomerNote(event.target.value)} placeholder="Optional customer-facing travel note, such as estimate basis, route assumptions, or attendance timing." rows={3} value={travelCustomerNote} /></label>
             </div>
           ) : null}
 
@@ -982,19 +1256,28 @@ export function QuoteBuilderModule({
                   <label><span>Discount %</span><InputNumber min={0} onChange={(value) => setDiscountPercent(numberValue(value))} precision={2} value={discountPercent} /></label>
                 </div>
               </section>
+              <label className="fortnox-quote-form-span-2"><span>Extras notes to customer</span><TextArea onChange={(event) => setExtrasCustomerNote(event.target.value)} placeholder="Optional customer-facing note for materials, rentals, pass-through assumptions, or exclusions." rows={3} value={extrasCustomerNote} /></label>
             </div>
           ) : null}
 
           {step === 4 ? (
             <div className="fortnox-quote-stack">
-              <div className="review-info-grid">
-                <div className="info-field"><span>Customer</span><strong>{activeCustomer.name}</strong></div>
-                <div className="info-field"><span>Work location</span><strong>{workLocation || '-'}</strong></div>
-                <div className="info-field"><span>Service type</span><strong>{serviceType}</strong></div>
-                <div className="info-field"><span>Delivery</span><strong>{deliveryMode}</strong></div>
-                <div className="info-field"><span>Labor shape</span><strong>{billingModel}</strong></div>
-                <div className="info-field"><span>Rate basis</span><strong>{billingModel === 'fixed-fee' ? 'Fixed fee' : rateSource === 'manual' ? 'Manual rate' : `${selectedRateCardLocation ? getLocationLabel(selectedRateCardLocation) : '-'} · ${selectedPreset?.label || 'Unselected'}`}</strong></div>
-              </div>
+                <div className="review-info-grid">
+                  <div className="info-field"><span>Customer</span><strong>{activeCustomer.name}</strong></div>
+                  <div className="info-field"><span>Work location</span><strong>{workLocation || '-'}</strong></div>
+                  <div className="info-field"><span>Service type</span><strong>{serviceType}</strong></div>
+                  <div className="info-field"><span>Delivery</span><strong>{deliveryMode}</strong></div>
+                  <div className="info-field"><span>Labor shape</span><strong>{billingModel}</strong></div>
+                  <div className="info-field"><span>Rate basis</span><strong>{billingModel === 'fixed-fee' ? 'Fixed fee' : rateSource === 'manual' ? 'Manual rate' : `${selectedRateCardLocation ? getLocationLabel(selectedRateCardLocation) : '-'} · ${selectedPreset?.label || 'Unselected'}`}</strong></div>
+                  {billingModel === 'callout-hourly' ? <div className="info-field"><span>08:00-18:00 minimum</span><strong>{formatAmount(currency, resolvedCallOut)}</strong></div> : null}
+                  {billingModel === 'callout-hourly' ? <div className="info-field"><span>08:00-18:00 included</span><strong>{resolvedIncludedHours.toFixed(2)} h</strong></div> : null}
+                {isSupportTariffQuote ? <div className="info-field"><span>18:00-08:00 rate</span><strong>{formatAmount(currency, obhPreviewRate)}</strong></div> : billingModel === 'hourly' || billingModel === 'callout-hourly' ? <div className="info-field"><span>OBH</span><strong>{obhLaborHours.toFixed(2)} h @ x{resolvedObhMultiplier.toFixed(2)}</strong></div> : null}
+                {isSupportTariffQuote ? <div className="info-field"><span>18:00-08:00 minimum</span><strong>{formatAmount(currency, resolvedObhCallOut)}</strong></div> : null}
+                {isSupportTariffQuote ? <div className="info-field"><span>18:00-08:00 included</span><strong>{resolvedObhIncludedHours.toFixed(2)} h</strong></div> : billingModel === 'callout-hourly' ? <div className="info-field"><span>OBH included</span><strong>{includedObhHours.toFixed(2)} h</strong></div> : null}
+                {isSupportTariffQuote ? <div className="info-field"><span>Weekend rate</span><strong>{formatAmount(currency, weekendPreviewRate)}</strong></div> : billingModel === 'hourly' || billingModel === 'callout-hourly' ? <div className="info-field"><span>Weekend</span><strong>{weekendLaborHours.toFixed(2)} h @ x{resolvedWeekendMultiplier.toFixed(2)}</strong></div> : null}
+                {isSupportTariffQuote ? <div className="info-field"><span>Weekend minimum</span><strong>{formatAmount(currency, resolvedWeekendCallOut)}</strong></div> : null}
+                {isSupportTariffQuote ? <div className="info-field"><span>Weekend included</span><strong>{resolvedWeekendIncludedHours.toFixed(2)} h</strong></div> : billingModel === 'callout-hourly' ? <div className="info-field"><span>Weekend included</span><strong>{includedWeekendHours.toFixed(2)} h</strong></div> : null}
+                </div>
               <label className="fortnox-quote-form-span-2">
                 <span className="fortnox-quote-label-row">
                   <span>Assumptions / exclusions</span>
@@ -1011,7 +1294,6 @@ export function QuoteBuilderModule({
                     <div className="page-description">{activeCustomer.name}</div>
                   </div>
                   <div className="fortnox-quote-actions fortnox-quote-actions-inline">
-                    <Button onClick={() => { void exportCustomerQuotePdf() }}>Store PDF</Button>
                     <Button onClick={() => { void saveCustomerQuotePdfAs() }}>Save PDF As...</Button>
                     <Button onClick={() => { void printCustomerQuote() }}>Print Quote</Button>
                   </div>
@@ -1030,9 +1312,40 @@ export function QuoteBuilderModule({
                 </section>
                 <section className="fortnox-quote-doc-section">
                   <Typography.Text strong>Labor</Typography.Text>
-                  <ul className="fortnox-quote-doc-list">
-                    {customerLaborDetails.map((item) => <li key={item}>{item}</li>)}
-                  </ul>
+                  {customerLaborDetails.length ? (
+                    <ul className="fortnox-quote-doc-list">
+                      {customerLaborDetails.map((item) => <li key={item}>{item}</li>)}
+                    </ul>
+                  ) : null}
+                  {customerLaborTariffRows.length ? (
+                    <table className="fortnox-quote-doc-table">
+                      <colgroup>
+                        <col style={{ width: '31%' }} />
+                        <col style={{ width: '23%' }} />
+                        <col style={{ width: '23%' }} />
+                        <col style={{ width: '23%' }} />
+                      </colgroup>
+                      <thead>
+                        <tr>
+                          <th>Window</th>
+                          <th>Hourly Rate</th>
+                          <th>Call Out</th>
+                          <th>Included Hours</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {customerLaborTariffRows.map((row) => (
+                          <tr key={row.window}>
+                            <td>{row.window}</td>
+                            <td>{row.hourlyRate}</td>
+                            <td>{row.callOut}</td>
+                            <td>{row.includedHours}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : null}
+                  {laborCustomerNote ? <div className="create-job-note-copy fortnox-quote-summary-copy">{laborCustomerNote}</div> : null}
                 </section>
                 <section className="fortnox-quote-doc-section">
                   <Typography.Text strong>Travel & Stay</Typography.Text>
@@ -1044,6 +1357,7 @@ export function QuoteBuilderModule({
                       </ul>
                     </div>
                   )) : <div className="page-description">No travel or overnight costs included.</div>}
+                  {travelCustomerNote ? <div className="create-job-note-copy fortnox-quote-summary-copy">{travelCustomerNote}</div> : null}
                 </section>
                 <section className="fortnox-quote-doc-section">
                   <Typography.Text strong>Extras</Typography.Text>
@@ -1052,6 +1366,7 @@ export function QuoteBuilderModule({
                       {customerExtras.map((item) => <li key={item}>{item}</li>)}
                     </ul>
                   ) : <div className="page-description">No extras included.</div>}
+                  {extrasCustomerNote ? <div className="create-job-note-copy fortnox-quote-summary-copy">{extrasCustomerNote}</div> : null}
                 </section>
                 <section className="fortnox-quote-doc-section">
                   <Typography.Text strong>Price Summary</Typography.Text>
@@ -1111,14 +1426,21 @@ export function QuoteBuilderModule({
       <aside className="fortnox-quote-sidebar">
         <section className="fortnox-quote-panel">
           <div className="toolbar-row">
-            <Typography.Text strong>{quoteName || 'Untitled Quote'}</Typography.Text>
-            <span className="toolbar-count">{currency}</span>
+          <Typography.Text strong>{quoteName || 'Untitled Quote'}</Typography.Text>
+          <span className="toolbar-count">{currency}</span>
           </div>
           <div className="review-info-grid">
-            <div className="info-field"><span>Workload</span><strong>{days} days · {dayHours.toFixed(2)} h/day · {technicians} tech</strong></div>
-            <div className="info-field"><span>Labor hours</span><strong>{laborHours.toFixed(2)} h</strong></div>
+            <div className="info-field"><span>Workload</span><strong>{isSupportTariffQuote ? 'Single technician tariff quote' : usesHourlyBuckets ? `${technicians} tech · ${standardLaborHours.toFixed(2)} std h${obhLaborHours > 0 ? ` · ${obhLaborHours.toFixed(2)} obh` : ''}${weekendLaborHours > 0 ? ` · ${weekendLaborHours.toFixed(2)} wknd` : ''}` : `${days} days · ${dayHours.toFixed(2)} h/day · ${technicians} tech`}</strong></div>
+            <div className="info-field"><span>Labor hours</span><strong>{isSupportTariffQuote ? '-' : `${laborHours.toFixed(2)} h`}</strong></div>
             <div className="info-field"><span>Selected rate</span><strong>{billingModel === 'fixed-fee' ? formatAmount(currency, fixedFee || 0) : formatAmount(currency, resolvedRate)}</strong></div>
-            <div className="info-field"><span>Call-out</span><strong>{billingModel === 'callout-hourly' ? formatAmount(currency, resolvedCallOut) : '-'}</strong></div>
+            <div className="info-field"><span>08:00-18:00 min.</span><strong>{billingModel === 'callout-hourly' ? formatAmount(currency, resolvedCallOut) : '-'}</strong></div>
+            <div className="info-field"><span>08:00-18:00 included</span><strong>{billingModel === 'callout-hourly' ? `${resolvedIncludedHours.toFixed(2)} h` : '-'}</strong></div>
+            <div className="info-field"><span>{isSupportTariffQuote ? '18:00-08:00' : 'OBH'}</span><strong>{isSupportTariffQuote ? formatAmount(currency, obhPreviewRate) : usesHourlyBuckets ? `${obhLaborHours.toFixed(2)} h @ x${resolvedObhMultiplier.toFixed(2)}` : '-'}</strong></div>
+            <div className="info-field"><span>{isSupportTariffQuote ? '18:00-08:00 incl.' : 'OBH included'}</span><strong>{billingModel === 'callout-hourly' ? `${(isSupportTariffQuote ? resolvedObhIncludedHours : includedObhHours).toFixed(2)} h` : '-'}</strong></div>
+            <div className="info-field"><span>{isSupportTariffQuote ? '18:00-08:00 min.' : 'OBH min.'}</span><strong>{billingModel === 'callout-hourly' ? formatAmount(currency, resolvedObhCallOut) : '-'}</strong></div>
+            <div className="info-field"><span>Weekend</span><strong>{isSupportTariffQuote ? formatAmount(currency, weekendPreviewRate) : usesHourlyBuckets ? `${weekendLaborHours.toFixed(2)} h @ x${resolvedWeekendMultiplier.toFixed(2)}` : '-'}</strong></div>
+            <div className="info-field"><span>Weekend incl.</span><strong>{billingModel === 'callout-hourly' ? `${(isSupportTariffQuote ? resolvedWeekendIncludedHours : includedWeekendHours).toFixed(2)} h` : '-'}</strong></div>
+            <div className="info-field"><span>Weekend min.</span><strong>{billingModel === 'callout-hourly' ? formatAmount(currency, resolvedWeekendCallOut) : '-'}</strong></div>
             <div className="info-field"><span>Saved quotes</span><strong>{customerQuotes.length}</strong></div>
             <div className="info-field"><span>Document status</span><strong>{activeQuoteId ? 'Saved quote loaded' : 'Working draft'}</strong></div>
           </div>

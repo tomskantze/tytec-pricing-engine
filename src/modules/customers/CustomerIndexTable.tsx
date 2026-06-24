@@ -1,6 +1,6 @@
 import { SearchOutlined } from '@ant-design/icons'
-import { Card, Input, Typography } from 'antd'
-import { useMemo, useState } from 'react'
+import { Card, Input, Space, Typography } from 'antd'
+import { useMemo, useState, type ReactNode } from 'react'
 import type { Customer } from '../../domain/types'
 import { ErpDataTable } from '../../design-system/ErpDataTable'
 import type { ErpTableColumn } from '../../design-system/ErpDataTable'
@@ -40,10 +40,12 @@ const columns: ErpTableColumn<CustomerRow>[] = [
 ]
 
 export function CustomerIndexTable({
+  actions,
   customers,
   emptyText,
   onOpenCustomer,
 }: {
+  actions?: ReactNode
   customers: Customer[]
   emptyText: string
   onOpenCustomer: (customerKey: string) => void
@@ -68,9 +70,12 @@ export function CustomerIndexTable({
           prefix={<SearchOutlined />}
           value={query}
         />
-        <Typography.Text className="toolbar-count">
-          {rows.length} customer{rows.length === 1 ? '' : 's'}
-        </Typography.Text>
+        <Space size={8} wrap>
+          <Typography.Text className="toolbar-count">
+            {rows.length} customer{rows.length === 1 ? '' : 's'}
+          </Typography.Text>
+          {actions}
+        </Space>
       </div>
       <ErpDataTable<CustomerRow>
         columns={columns}

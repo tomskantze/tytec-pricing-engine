@@ -1,10 +1,10 @@
 import type { FortnoxArticleMap } from '../../domain/fortnoxArticles'
-import { getRateCardMode } from '../../domain/rateCards'
 import type { Customer, InvoiceBatch, InvoiceSummary, JobInput, JobReviewOverride, PricedJob } from '../../domain/types'
 import type { RunDocumentMeta } from '../../state/appState'
 import { CreateJobModule } from '../create-job/CreateJobModule'
 import { InvoicePrepModule } from '../invoice-prep/InvoicePrepModule'
 import { ReviewQueueModule } from '../review-queue/ReviewQueueModule'
+import { CustomerProfileModule } from './CustomerProfileModule'
 import { CustomerWorkspaceModule } from './CustomerWorkspaceModule'
 import { CustomersModule } from './CustomersModule'
 import { TechniciansModule } from './TechniciansModule'
@@ -46,7 +46,7 @@ export function CustomerWorkspaceView({
 }: {
   activeInvoiceId: string
   activeInvoiceLabel: string
-  activeTab: 'overview' | 'create-job' | 'invoices' | 'review-queue' | 'technicians'
+  activeTab: 'profile' | 'rate-cards' | 'create-job' | 'invoices' | 'review-queue' | 'technicians'
   batches: InvoiceBatch[]
   createdJobs: JobInput[]
   customer: Customer
@@ -75,15 +75,16 @@ export function CustomerWorkspaceView({
   onSaveReviewOverride: (jobId: string, override: JobReviewOverride | null) => void
   onSelectBatch: (batch: string) => void
   onSelectInvoice: (invoiceId: string) => void
-  onSelectTab: (tab: 'overview' | 'create-job' | 'invoices' | 'review-queue' | 'technicians') => void
+  onSelectTab: (tab: 'profile' | 'rate-cards' | 'create-job' | 'invoices' | 'review-queue' | 'technicians') => void
   onToggleIncludeSla: () => void
 }) {
-  const showCreateJob = customer.locationCards.some((location) => getRateCardMode(location) === 'time-window')
+  const showCreateJob = customer.locationCards.length > 0
   const showTechnicians = customer.customerKey === 'AKAM'
+  const needsReviewCount = reviewJobs.filter((job) => job.queueState !== 'Ready').length
   const effectiveActiveTab = !showCreateJob && activeTab === 'create-job'
-    ? 'invoices'
+    ? 'rate-cards'
     : !showTechnicians && activeTab === 'technicians'
-      ? 'overview'
+      ? 'profile'
       : activeTab
 
   return (
@@ -132,8 +133,16 @@ export function CustomerWorkspaceView({
       )}
       onBackToCustomers={onBackToCustomers}
       onSelectTab={onSelectTab}
-      showCreateJob={showCreateJob}
-      overviewContent={(
+      profileContent={(
+        <CustomerProfileModule
+          customer={customer}
+          customers={customers}
+          invoiceCount={invoiceSummaries.length}
+          needsReviewCount={needsReviewCount}
+          onCustomerChange={onCustomerChange}
+        />
+      )}
+      rateCardsContent={(
         <CustomersModule
           customers={customers}
           embedded
@@ -143,6 +152,7 @@ export function CustomerWorkspaceView({
           selectedCustomerKey={customer.customerKey}
         />
       )}
+      showCreateJob={showCreateJob}
       reviewQueueContent={(
         <ReviewQueueModule
           customer={customer}

@@ -1,5 +1,6 @@
 @import "./base.css";
 @import "./window.css";
+@import "./nav.css";
 @import "./shell.css";
 @import "./controls.css";
 @import "./tables.css";
@@ -8,3 +9,4 @@
 @import "./fortnox.css";
 @import "./quote.css";
 @import "./create-job.css";
+@import "./home.css";

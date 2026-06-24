@@ -8,7 +8,7 @@ import { setFortnoxArticleNumber } from './domain/fortnoxArticles'
 import type { FortnoxLineKind } from './domain/fortnoxArticles'
 import type { Customer, InvoiceBatch, JobInput, JobReviewOverride, LocationCard, ShiftLabel } from './domain/types'
 import { AppProviders } from './design-system/AppProviders'
-import { applyCustomerDefaults, hydrateState, loadState, saveState, type ActiveView, type AppState } from './state/appState'
+import { applyCustomerDefaults, hydrateState, loadState, saveState, type AppState } from './state/appState'
 import { getUploadedDocument, getUploadedDocumentByKind, loadDbState, saveDbState, saveUploadedDocument } from './state/localDb'
 import {
   attachRunDocument,
@@ -30,6 +30,7 @@ import { CustomersModule } from './modules/customers/CustomersModule'
 import { CustomerWorkspaceView } from './modules/customers/CustomerWorkspaceView'
 import { FortnoxModule } from './modules/fortnox/FortnoxModule'
 import { FortnoxQuotePage } from './modules/fortnox/FortnoxQuotePage'
+import { HomeModule } from './modules/home/HomeModule'
 import type { SavedQuote } from './modules/fortnox/quoteTypes'
 import { buildGeneratedInvoiceEntries } from './modules/invoice-prep/generatedInvoices'
 import { buildInvoiceSummary, compareInvoiceSummaries } from './modules/invoice-prep/invoiceSummary'
@@ -482,20 +483,68 @@ export function App() {
   const reviewJobs = useMemo(() => (
     selectedCustomer ? [...pricedJobs, ...priceJobs(selectedCustomer, createdJobs, state.jobReviewOverrides, state.fortnoxArticles)] : pricedJobs
   ), [createdJobs, pricedJobs, selectedCustomer, state.fortnoxArticles, state.jobReviewOverrides])
+  const customerNavItems = useMemo(() => state.customers
+    .map((customer) => ({
+      key: customer.customerKey,
+      name: customer.name,
+      invoicesLabel: customer.customerKey === 'AKAM' ? 'Settlements' : 'Invoices',
+      showCreateJob: customer.locationCards.length > 0,
+      showTechnicians: customer.customerKey === 'AKAM',
+    }))
+    .sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: 'base' })), [state.customers])
 
-  function navigate(activeView: ActiveView) {
-    updateState((current) => (
-      activeView === 'customers'
-        ? { ...current, activeView, selectedCustomerKey: '' }
-        : { ...current, activeView }
-    ))
+  function openCustomersIndex() {
+    updateState((current) => ({
+      ...current,
+      activeView: 'customers',
+      activeImportRunId: '',
+      selectedCustomerKey: '',
+      selectedInvoiceCustomerKey: '',
+    }))
+  }
+
+  function openHome() {
+    updateState((current) => ({
+      ...current,
+      activeView: 'home',
+      activeImportRunId: '',
+      selectedCustomerKey: '',
+      selectedInvoiceCustomerKey: '',
+    }))
+  }
+
+  function openCustomerWorkspaceTab(customerKey: string, tab: 'profile' | 'rate-cards' | 'create-job' | 'invoices' | 'review-queue' | 'technicians') {
+    updateState((current) => ({
+      ...current,
+      activeView: 'customers',
+      activeImportRunId: current.selectedCustomerKey === customerKey ? current.activeImportRunId : '',
+      customerWorkspaceTab: tab,
+      selectedCustomerKey: customerKey,
+      selectedInvoiceCustomerKey: customerKey,
+    }))
+  }
+
+  function openFortnoxArticleMapping() {
+    updateState((current) => ({
+      ...current,
+      activeView: 'fortnox',
+      selectedFortnoxCustomerKey: '',
+    }))
+  }
+
+  function openQuoteBuilderTab(tab: 'builder' | 'saved') {
+    updateState((current) => ({
+      ...current,
+      activeView: 'quote-builder',
+      quoteBuilderTab: tab,
+    }))
   }
 
   function openCustomerWorkspace(customerKey: string) {
     updateState((current) => ({
       ...current,
       activeView: 'customers',
-      customerWorkspaceTab: 'overview',
+      customerWorkspaceTab: 'profile',
       activeImportRunId: '',
       selectedCustomerKey: customerKey,
       selectedInvoiceCustomerKey: customerKey,
@@ -694,7 +743,7 @@ export function App() {
       ...current,
       quotes: current.quotes.some((currentQuote) => currentQuote.id === quote.id)
         ? current.quotes.map((currentQuote) => (currentQuote.id === quote.id ? quote : currentQuote))
-        : [quote, ...current.quotes],
+        : [...current.quotes, quote],
     }))
   }
 
@@ -707,8 +756,38 @@ export function App() {
 
   return (
     <AppProviders>
-      <ErpShell activeView={state.activeView} onNavigate={navigate}>
-        {state.activeView === 'fortnox' ? (
+      <ErpShell
+        activeView={state.activeView}
+        customers={customerNavItems}
+        customerWorkspaceTab={state.customerWorkspaceTab}
+        onOpenCustomer={openCustomerWorkspace}
+        onOpenCustomerTab={openCustomerWorkspaceTab}
+        onOpenHome={openHome}
+        onOpenCustomers={openCustomersIndex}
+        onOpenFortnox={openFortnoxArticleMapping}
+        onOpenQuoteTab={openQuoteBuilderTab}
+        quoteBuilderTab={state.quoteBuilderTab}
+        selectedCustomerKey={state.selectedCustomerKey}
+      >
+        {state.activeView === 'home' ? (
+          <HomeModule
+            customers={state.customers}
+            importRuns={state.importRuns.map((run) => ({
+              id: run.id,
+              customerKey: run.customerKey,
+              customerName: state.customers.find((customer) => customer.customerKey === run.customerKey)?.name || run.customerKey,
+              label: run.label,
+              updatedAt: run.updatedAt,
+            }))}
+            onOpenCustomer={openCustomerWorkspace}
+            onOpenCustomerInvoices={(customerKey) => openCustomerWorkspaceTab(customerKey, 'invoices')}
+            onOpenCustomers={openCustomersIndex}
+            onOpenFortnox={openFortnoxArticleMapping}
+            onOpenQuoteBuilder={() => openQuoteBuilderTab('builder')}
+            onOpenSavedQuotes={() => openQuoteBuilderTab('saved')}
+            quotes={state.quotes}
+          />
+        ) : state.activeView === 'fortnox' ? (
           <FortnoxModule
             customer={fortnoxCustomer}
             customers={state.customers}
@@ -718,12 +797,13 @@ export function App() {
           />
         ) : state.activeView === 'quote-builder' ? (
           <FortnoxQuotePage
-            customer={fortnoxCustomer}
+            activeTab={state.quoteBuilderTab}
             customers={state.customers}
             quotes={state.quotes}
             onDeleteQuote={deleteQuote}
             onSaveQuote={saveQuote}
             onSelectCustomer={(selectedFortnoxCustomerKey) => updateState({ selectedFortnoxCustomerKey })}
+            onSelectTab={openQuoteBuilderTab}
           />
         ) : !selectedCustomer ? (
           <CustomersModule

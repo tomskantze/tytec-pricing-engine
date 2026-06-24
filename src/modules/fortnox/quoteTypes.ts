@@ -49,18 +49,29 @@ export type QuoteDraft = {
   technicianCount: number | null
   workDays: number | null
   hoursPerDay: number | null
+  obhHours: number | null
+  obhMultiplier: number | null
+  weekendHours: number | null
+  weekendMultiplier: number | null
   billingModel: QuoteBillingModel
   rateSource: QuoteRateSource
   rateCardLocationId: string
   presetRateId: string
   manualRate: number | null
   manualCallOutFee: number | null
+  manualObhCallOutFee: number | null
+  manualWeekendCallOutFee: number | null
+  manualIncludedHours: number | null
+  manualObhIncludedHours: number | null
+  manualWeekendIncludedHours: number | null
+  laborCustomerNote: string
   fixedFee: number | null
   techCostSource: QuoteTechCostSource
   technicianCostId: string
   manualTechPayRate: number | null
   travelRequired: boolean
   travelGroups: QuoteTravelGroup[]
+  travelCustomerNote: string
   consumables: number | null
   consumablesNote: string
   equipmentLabel: string
@@ -68,6 +79,7 @@ export type QuoteDraft = {
   equipmentRate: number | null
   equipmentNote: string
   extraItems: QuoteExtraItem[]
+  extrasCustomerNote: string
   otherCostLabel: string
   otherCost: number | null
   otherCostNote: string
@@ -81,6 +93,7 @@ export type QuoteDraft = {
 export type SavedQuote = {
   id: string
   customerKey: string
+  customerName: string
   quoteRef: string
   quoteName: string
   currency: string
@@ -174,18 +187,29 @@ export function createQuoteDraftDefaults(defaults?: {
     technicianCount: 1,
     workDays: 1,
     hoursPerDay: 4,
+    obhHours: 0,
+    obhMultiplier: 1.5,
+    weekendHours: 0,
+    weekendMultiplier: 2,
     billingModel: 'hourly',
     rateSource: 'preset',
     rateCardLocationId: defaults?.rateCardLocationId || '',
     presetRateId: '',
     manualRate: null,
     manualCallOutFee: null,
+    manualObhCallOutFee: null,
+    manualWeekendCallOutFee: null,
+    manualIncludedHours: null,
+    manualObhIncludedHours: null,
+    manualWeekendIncludedHours: null,
+    laborCustomerNote: '',
     fixedFee: null,
     techCostSource: 'manual',
     technicianCostId: '',
     manualTechPayRate: null,
     travelRequired: true,
     travelGroups: [createTravelGroup(1)],
+    travelCustomerNote: '',
     consumables: 0,
     consumablesNote: '',
     equipmentLabel: '',
@@ -193,6 +217,7 @@ export function createQuoteDraftDefaults(defaults?: {
     equipmentRate: 0,
     equipmentNote: '',
     extraItems: [],
+    extrasCustomerNote: '',
     otherCostLabel: '',
     otherCost: 0,
     otherCostNote: '',

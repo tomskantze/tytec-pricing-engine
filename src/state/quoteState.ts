@@ -28,6 +28,7 @@ export function normalizeQuote(quote: Partial<SavedQuote>): SavedQuote {
   return {
     id: quote.id || `quote-${Date.now()}`,
     customerKey: quote.customerKey || '',
+    customerName: quote.customerName || quote.customerKey || 'Custom customer',
     quoteRef: quote.quoteRef || quote.draft?.quoteRef || defaults.quoteRef,
     quoteName: quote.quoteName || quote.draft?.quoteName || 'Untitled Quote',
     currency: quote.currency || quote.draft?.currency || 'EUR',

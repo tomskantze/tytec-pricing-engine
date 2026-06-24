@@ -1,5 +1,6 @@
 import { normalizeServiceDate, normalizeTimestamp } from '../../domain/dates'
 import { parseAmount } from '../../domain/money'
+import { getLocationLabel } from '../../domain/matching'
 import type { Customer, JobInput } from '../../domain/types'
 
 const summaryMonths: Record<string, string> = {
@@ -19,6 +20,22 @@ const baseAliases: Record<string, { city: string; cityCode: string; country: str
 type DraftResult = {
   job: JobInput | null
   warnings: string[]
+}
+
+export type ManualJobRecordInput = {
+  completionNotes: string
+  consumablesAmount: number
+  consumablesDescription: string
+  customerTicket: string
+  obhHours: number
+  regularHours: number
+  serviceDate: string
+  sourceRow: number
+  summary: string
+  technician: string
+  tytecTicket: string
+  weekendHours: number
+  locationId: string
 }
 
 function normalizeKey(value: string) {
@@ -122,6 +139,65 @@ function withDates(serviceDate: string, ...times: string[]) {
     previous = time
   })
   return stamped
+}
+
+function makeManualId(input: ManualJobRecordInput) {
+  const basis = input.customerTicket || input.tytecTicket || `manual-${input.sourceRow}`
+  return `${basis}-${input.sourceRow}`.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || `manual-${input.sourceRow}`
+}
+
+export function createManualJobRecordDraft(customer: Customer, input: ManualJobRecordInput): DraftResult {
+  const warnings: string[] = []
+  const location = customer.locationCards.find((card) => card.id === input.locationId) ?? null
+  const ticket = input.customerTicket.trim() || input.tytecTicket.trim()
+  const serviceDate = input.serviceDate.trim()
+  const regularHours = Math.max(0, Number(input.regularHours) || 0)
+  const obhHours = Math.max(0, Number(input.obhHours) || 0)
+  const weekendHours = Math.max(0, Number(input.weekendHours) || 0)
+  if (!ticket) warnings.push('Customer reference or Tytec ticket is required.')
+  if (!serviceDate) warnings.push('Service date is required.')
+  if (!location) warnings.push('Rate card location is required.')
+  if (!regularHours && !obhHours && !weekendHours) warnings.push('At least one reported hour bucket is required.')
+  if (!input.technician.trim()) warnings.push('Technician is recommended for technician-specific pricing.')
+  if (!ticket || !serviceDate || !location || (!regularHours && !obhHours && !weekendHours)) return { job: null, warnings }
+
+  return {
+    warnings,
+    job: {
+      id: makeManualId(input),
+      sourceRow: input.sourceRow,
+      customerKey: customer.customerKey,
+      businessEntity: customer.name,
+      serviceDate,
+      date: normalizeServiceDate(serviceDate),
+      ticket,
+      jiraIssueKey: input.tytecTicket.trim() || undefined,
+      customerRef: input.customerTicket.trim() || ticket,
+      city: location.city,
+      country: location.country,
+      endCustomer: '',
+      technician: input.technician.trim(),
+      summary: input.summary.trim() || `${getLocationLabel(location)} job record`,
+      sow: input.summary.trim(),
+      reportStatus: 'Reported',
+      completionNotes: input.completionNotes.trim(),
+      travelStart: '',
+      onSite: '',
+      offSite: '',
+      travelFinish: '',
+      reportedHours: { bh: regularHours, obh: obhHours, wh: weekendHours },
+      consumablesAmount: Math.max(0, Number(input.consumablesAmount) || 0),
+      consumablesDescription: input.consumablesDescription.trim(),
+      raw: {
+        jobRecordSource: 'manual',
+        locationId: location.id,
+        location: getLocationLabel(location),
+        notes: input.completionNotes.trim(),
+        summary: input.summary.trim(),
+        tytecTicket: input.tytecTicket.trim(),
+      },
+    },
+  }
 }
 
 export function parseCreateJobDraft(customer: Customer, input: {

@@ -1,5 +1,5 @@
 import { EditOutlined, LockOutlined, SearchOutlined } from '@ant-design/icons'
-import { Button, Card, Empty, Input, Modal, Select, Space, Typography } from 'antd'
+import { Button, Card, Empty, Input, Modal, Select, Space } from 'antd'
 import { useMemo, useState } from 'react'
 import { getFortnoxArticleNumber } from '../../domain/fortnoxArticles'
 import type { FortnoxArticleMap, FortnoxLineKind } from '../../domain/fortnoxArticles'
@@ -7,6 +7,8 @@ import { getLocationLabel } from '../../domain/matching'
 import { formatAmount } from '../../domain/money'
 import { getRateCardMode, showsFullShift } from '../../domain/rateCards'
 import type { Customer, RateCardMode, ShiftLabel } from '../../domain/types'
+import { PageHeader } from '../../design-system/PageHeader'
+import { CustomerIndexTable } from '../customers/CustomerIndexTable'
 import { CustomerSummary } from '../customers/CustomerSummary'
 
 type FortnoxRow = {
@@ -134,12 +136,18 @@ export function FortnoxModule({
 }) {
   const [query, setQuery] = useState('')
   const [editor, setEditor] = useState<ArticleEditor | null>(null)
-  const activeCustomer = customer ?? customers[0] ?? null
+  const activeCustomer = customer ?? null
   const rows = useMemo(() => {
     if (!activeCustomer) return []
     const needle = query.trim().toLowerCase()
     return getRows(activeCustomer).filter((row) => rowMatches(row, fortnoxArticles, needle))
   }, [activeCustomer, fortnoxArticles, query])
+  const customerOptions = useMemo(
+    () => [...customers]
+      .sort((left, right) => left.name.localeCompare(right.name))
+      .map((item) => ({ label: item.name, value: item.customerKey })),
+    [customers],
+  )
   const groups = useMemo(() => getGroups(rows), [rows])
   const mappedArticles = mappedCount(rows, fortnoxArticles)
   const totalArticles = articleTargetCount(rows)
@@ -158,33 +166,39 @@ export function FortnoxModule({
 
   return (
     <>
-      <div className="customer-workspace-topbar global-workspace-topbar">
-        <div className="global-workspace-spacer" />
-        <div className="customer-workspace-meta">
-          <Select
-            className="global-workspace-select"
-            onChange={onSelectCustomer}
-            options={customers.map((item) => ({ label: item.name, value: item.customerKey }))}
-            placeholder="Select customer"
-            size="small"
-            value={activeCustomer?.customerKey}
-          />
-        </div>
-      </div>
+      <PageHeader title="Article Mapping" />
+      {!activeCustomer ? (
+        <CustomerIndexTable
+          customers={customers}
+          emptyText="No customers match the current search."
+          onOpenCustomer={onSelectCustomer}
+        />
+      ) : null}
+      {activeCustomer ? (
       <Card className="workspace-card" variant="borderless">
-        {activeCustomer ? <CustomerSummary customer={activeCustomer} /> : null}
+        <CustomerSummary customer={activeCustomer} />
         <div className="toolbar-row">
-          <Typography.Text strong>Article Mapping</Typography.Text>
+          <span className="toolbar-count">
+            {groups.length} locations · {mappedArticles}/{totalArticles} mapped
+          </span>
           <Space size={8} wrap>
+            <Select
+              allowClear
+              className="global-workspace-select"
+              onChange={(value) => onSelectCustomer(value || '')}
+              options={customerOptions}
+              placeholder="Select customer"
+              value={activeCustomer?.customerKey || undefined}
+            />
             <Input
               allowClear
               className="toolbar-search"
+              disabled={!activeCustomer}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search articles"
               prefix={<SearchOutlined />}
               value={query}
             />
-            <span className="toolbar-count">{mappedArticles}/{totalArticles} mapped</span>
           </Space>
         </div>
         {groups.length ? (
@@ -192,7 +206,7 @@ export function FortnoxModule({
             {groups.map((group) => (
               <section className="fortnox-location-section" key={group.key}>
                 <div className="fortnox-location-head">
-                  <Typography.Text className="fortnox-location-title">{group.location}</Typography.Text>
+                  <span className="fortnox-location-title">{group.location}</span>
                   <span>{mappedCount(group.rows, fortnoxArticles)}/{articleTargetCount(group.rows)} mapped</span>
                 </div>
                 <div className="fortnox-shift-matrix">
@@ -249,7 +263,12 @@ export function FortnoxModule({
               </section>
             ))}
           </div>
-        ) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} />}
+        ) : (
+          <Empty
+            description="No article rows match the current search."
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+          />
+        )}
         <Modal
           okButtonProps={{ disabled: !editor?.value.trim() }}
           okText="Save Article"
@@ -275,6 +294,7 @@ export function FortnoxModule({
           ) : null}
         </Modal>
       </Card>
+      ) : null}
     </>
   )
 }

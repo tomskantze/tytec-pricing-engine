@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { Customer } from '../../domain/types'
 import { ErpDataTable } from '../../design-system/ErpDataTable'
 import type { ErpTableColumn } from '../../design-system/ErpDataTable'
+import { CustomerSummary } from './CustomerSummary'
 import { TechnicianEditorDrawer, type TechnicianEditorResult } from './TechnicianEditorDrawer'
 
 type TechnicianTableRow = {
@@ -35,6 +36,7 @@ export function TechniciansModule({
   const technicians = customer.technicians || []
   const assignments = customer.technicianTierAssignments || []
   const overrides = customer.technicianRates || []
+  const activeTechnicianCount = technicians.filter((technician) => technician.active).length
 
   const rows = useMemo<TechnicianTableRow[]>(() => (
     technicians.map((technician) => {
@@ -104,7 +106,11 @@ export function TechniciansModule({
   return (
     <>
       <Card className="workspace-card" variant="borderless">
+        <CustomerSummary customer={customer} />
         <div className="toolbar-row">
+          <span className="toolbar-count">
+            {technicians.length} technicians · {activeTechnicianCount} active
+          </span>
           <Space size={8} wrap>
             <Button icon={<PlusOutlined />} type="primary" onClick={() => setDrawerMode('add')}>Add Technician</Button>
             <Button disabled={!selectedTechnician} icon={<EditOutlined />} onClick={() => setDrawerMode('edit')}>Edit Technician</Button>

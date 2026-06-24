@@ -3,9 +3,7 @@
   align-content: start;
 }
 
-.quote-workspace-meta {
-  gap: 12px;
-}
+.quote-workspace-meta { gap: 12px; }
 
 .quote-workspace-select {
   min-width: 200px;
@@ -49,6 +47,32 @@
   display: grid;
   gap: 6px;
   min-width: 320px;
+}
+
+.fortnox-quote-launch {
+  gap: 16px;
+  width: min(100%, 860px);
+}
+
+.fortnox-quote-launch-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+}
+
+.fortnox-quote-launch-controls {
+  display: grid;
+  grid-template-columns: minmax(220px, 250px) minmax(220px, 280px) minmax(160px, 190px);
+  gap: 10px;
+  flex: 1;
+}
+
+.fortnox-quote-launch-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 .fortnox-quote-subsection {
@@ -217,13 +241,16 @@
 .fortnox-saved-quote-meta span {
   display: inline-flex;
   align-items: center;
-  min-height: 24px;
-  padding: 0 8px;
+  min-height: 26px;
+  padding: 4px 9px;
   border: 1px solid var(--erp-border-soft);
   border-radius: 999px;
   background: var(--erp-surface-soft);
   color: var(--erp-muted);
   font-size: 11px;
+  line-height: 1.2;
+  text-align: center;
+  white-space: normal;
 }
 
 .fortnox-saved-quote .fortnox-quote-actions {
@@ -238,6 +265,20 @@
 
   .fortnox-quote-library-select {
     min-width: 0;
+  }
+
+  .fortnox-quote-launch-bar {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .fortnox-quote-launch-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .fortnox-quote-launch-actions {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .fortnox-quote-stepbar {

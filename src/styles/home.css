@@ -1,0 +1,128 @@
+.home-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--erp-gap);
+}
+
+.home-section-head {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.home-section-label {
+  color: #65778a;
+  font-size: 8.5px;
+  font-weight: 640;
+  letter-spacing: 0.065em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.home-section-value {
+  color: var(--erp-text);
+  font-size: 12px;
+  font-weight: 520;
+}
+
+.home-list {
+  display: grid;
+  gap: 6px;
+}
+
+.home-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 11px;
+  border: 1px solid var(--erp-border-soft);
+  border-radius: 7px;
+  background: var(--erp-surface-soft);
+  color: var(--erp-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.home-list-item:hover {
+  border-color: var(--erp-border);
+  background: #f7f9fc;
+}
+
+.home-list-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.home-list-copy strong {
+  color: var(--erp-text);
+  font-size: 12px;
+  font-weight: 520;
+}
+
+.home-list-copy span,
+.home-list-meta,
+.home-list-empty {
+  color: var(--erp-muted);
+  font-size: 11px;
+}
+
+.home-list-meta {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.home-list-empty {
+  padding: 12px 2px 4px;
+}
+
+.customer-profile-secondary {
+  margin-bottom: 12px;
+}
+
+.customer-profile-head {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.customer-profile-label {
+  color: #65778a;
+  font-size: 8.5px;
+  font-weight: 640;
+  letter-spacing: 0.065em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.customer-profile-value {
+  color: var(--erp-text);
+  font-size: 12px;
+  font-weight: 520;
+}
+
+.customer-profile-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.customer-profile-grid .info-field {
+  padding: 8px 10px;
+}
+
+@media (max-width: 1180px) {
+  .home-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .home-grid,
+  .customer-profile-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

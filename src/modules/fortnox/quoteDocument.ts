@@ -15,6 +15,13 @@ type QuoteHtmlLine = {
   amount: string
 }
 
+type QuoteHtmlTariffRow = {
+  window: string
+  hourlyRate: string
+  callOut: string
+  includedHours: string
+}
+
 type QuoteHtmlTravelGroup = {
   title: string
   details: string[]
@@ -57,8 +64,12 @@ export function buildCustomerQuoteHtml(input: {
   assumptions: string
   basics: Array<{ label: string; value: string }>
   laborDetails: string[]
+  laborTariffRows?: QuoteHtmlTariffRow[]
+  laborNote: string
   travelGroups: QuoteHtmlTravelGroup[]
+  travelNote: string
   extras: string[]
+  extrasNote: string
   summaryLines: QuoteHtmlLine[]
   total: string
 }) {
@@ -77,16 +88,42 @@ export function buildCustomerQuoteHtml(input: {
     `)
     .join('')
   const scopeMarkup = paragraphMarkup(input.summaryText)
-  const laborMarkup = listMarkup(input.laborDetails)
+  const laborTariffMarkup = input.laborTariffRows?.length
+    ? `<table class="tariff-table">
+        <colgroup>
+          <col style="width: 31%" />
+          <col style="width: 23%" />
+          <col style="width: 23%" />
+          <col style="width: 23%" />
+        </colgroup>
+        <thead>
+          <tr>
+            <th>Window</th>
+            <th>Hourly Rate</th>
+            <th>Call Out</th>
+            <th>Included Hours</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${input.laborTariffRows.map((row) => `<tr>
+            <td>${escapeHtml(row.window)}</td>
+            <td>${escapeHtml(row.hourlyRate)}</td>
+            <td>${escapeHtml(row.callOut)}</td>
+            <td>${escapeHtml(row.includedHours)}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`
+    : ''
+  const laborMarkup = `${listMarkup(input.laborDetails)}${laborTariffMarkup}${paragraphMarkup(input.laborNote)}`
   const travelMarkup = input.travelGroups.length
     ? `<div class="group-grid">${input.travelGroups.map((group) => `
       <section class="group-card">
         <h3>${escapeHtml(group.title)}</h3>
         ${listMarkup(group.details)}
       </section>
-    `).join('')}</div>`
-    : ''
-  const extrasMarkup = listMarkup(input.extras)
+    `).join('')}</div>${paragraphMarkup(input.travelNote)}`
+    : paragraphMarkup(input.travelNote)
+  const extrasMarkup = `${listMarkup(input.extras)}${paragraphMarkup(input.extrasNote)}`
   const assumptionsMarkup = listMarkup(
     String(input.assumptions || '')
       .split(/\n{2,}/)
@@ -101,7 +138,8 @@ export function buildCustomerQuoteHtml(input: {
   <title>${escapeHtml(input.quoteName || 'Quote')}</title>
   <style>
     @page { margin: 12mm; }
-    body { font-family: Inter, Arial, sans-serif; font-size: 12px; color: #21314d; margin: 0; background: #eef3f7; }
+    html, body { background: #fff; }
+    body { font-family: Inter, Arial, sans-serif; font-size: 12px; color: #21314d; margin: 0; background: #fff; }
     .page { position: relative; max-width: 860px; margin: 0 auto; background: #fff; padding: 18px 24px 22px; overflow: hidden; }
     .watermark { position: absolute; top: 265px; left: 50%; width: 82%; transform: translateX(-50%); opacity: 0.04; z-index: 0; }
     .watermark img { display: block; width: 100%; height: auto; }
@@ -132,17 +170,20 @@ export function buildCustomerQuoteHtml(input: {
     .detail-list li { margin: 0 0 3px; }
     .group-grid { display: grid; gap: 8px; }
     .group-card { padding: 9px 10px; border: 1px solid #dfe7f1; border-radius: 7px; background: #fbfcfe; break-inside: avoid-page; page-break-inside: avoid; }
-    table { width: 100%; border-collapse: collapse; margin-top: 8px; break-inside: auto; page-break-inside: auto; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; break-inside: auto; page-break-inside: auto; }
     thead { display: table-header-group; }
     tbody { display: table-row-group; }
     tr { break-inside: avoid; page-break-inside: avoid; }
-    th, td { text-align: left; padding: 7px 0; border-bottom: 1px solid #e4ebf2; font-size: 12px; }
-    th { color: #60708a; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; }
-    th:last-child, td:last-child { text-align: right; }
+    .tariff-table { table-layout: fixed; }
+    .tariff-table th, .tariff-table td { padding-right: 16px; text-align: left; }
+    .tariff-table th:nth-child(n + 2), .tariff-table td:nth-child(n + 2) { text-align: right; }
+    .tariff-table th:last-child, .tariff-table td:last-child { padding-right: 0; }
+    th, td { text-align: left; padding: 8px 10px 8px 0; border-bottom: 1px solid #e4ebf2; font-size: 12px; vertical-align: top; font-variant-numeric: tabular-nums; }
+    th { color: #60708a; font-size: 12px; font-weight: 600; letter-spacing: 0; text-transform: none; }
+    th:last-child, td:last-child { text-align: right; padding-right: 0; }
     .total { margin-top: 10px; display: flex; justify-content: flex-end; gap: 12px; font-size: 16px; font-weight: 700; color: #1d3154; }
     .footer { margin-top: 16px; padding-top: 10px; border-top: 1px solid #d9e3ee; display: flex; justify-content: space-between; align-items: end; gap: 14px; color: #6b7890; font-size: 10px; line-height: 1.4; }
-    .footer-brand { display: flex; align-items: center; gap: 8px; }
-    .footer-mark { width: 20px; height: 20px; object-fit: cover; border-radius: 999px; opacity: 0.72; }
+    .footer-brand { white-space: nowrap; }
   </style>
 </head>
 <body>
@@ -152,7 +193,9 @@ export function buildCustomerQuoteHtml(input: {
     </div>
     <div class="masthead">
       <div class="brand">
-        <img class="brand-mark" src="${tytecBurstDataUrl}" alt="" />
+        <div class="brand-copy">
+          <img class="brand-mark" src="${tytecBurstDataUrl}" alt="" />
+        </div>
         <div class="brand-copy">
           <img class="brand-wordmark" src="${tytecWordmarkDataUrl}" alt="Tytec" />
         </div>
@@ -203,13 +246,7 @@ export function buildCustomerQuoteHtml(input: {
       <div>
         Quoted work is based on the stated scope, assumptions, and access conditions. Delays outside Tytec control may affect schedule and billable time.
       </div>
-      <div class="footer-brand">
-        <img class="footer-mark" src="${tytecBurstDataUrl}" alt="" />
-        <div>
-          TYTEC<br />
-          ${escapeHtml(input.customerName)} quotation
-        </div>
-      </div>
+      <div class="footer-brand">TYTEC · ${escapeHtml(input.customerName)} quotation</div>
     </div>
   </div>
 </body>

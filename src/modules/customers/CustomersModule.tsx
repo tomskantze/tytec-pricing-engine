@@ -79,12 +79,10 @@ export function CustomersModule({
     if (embedded) return null
     return (
       <>
-        <div className="customer-workspace-topbar global-workspace-topbar">
-          <div className="global-workspace-spacer" />
-          <Space size={8} wrap>
-            <Button type="primary" onClick={() => setCustomerDrawerMode('add')}>Add Customer</Button>
-          </Space>
-        </div>
+        <PageHeader
+          title="Customers"
+          actions={<Button type="primary" onClick={() => setCustomerDrawerMode('add')}>Add Customer</Button>}
+        />
         <CustomerIndexTable customers={customers} emptyText="No customers match the current search." onOpenCustomer={onSelectCustomer} />
         {customerDrawer}
       </>

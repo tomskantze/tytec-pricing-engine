@@ -23,6 +23,15 @@
   grid-column: span 3;
 }
 
+.create-job-entry-field-span-4 {
+  grid-column: 1 / -1;
+}
+
+.create-job-mode {
+  max-width: max-content;
+  margin-top: 10px;
+}
+
 .create-job-entry-field > span {
   color: #65778a;
   font-size: 8.5px;
@@ -30,6 +39,11 @@
   letter-spacing: 0.065em;
   line-height: 1.2;
   text-transform: uppercase;
+}
+
+.create-job-entry-field .ant-input-number,
+.create-job-entry-field .ant-select {
+  width: 100%;
 }
 
 .create-job-preview-grid {
@@ -59,7 +73,8 @@
   }
 
   .create-job-entry-field-span-2,
-  .create-job-entry-field-span-3 {
+  .create-job-entry-field-span-3,
+  .create-job-entry-field-span-4 {
     grid-column: auto;
   }
 }
