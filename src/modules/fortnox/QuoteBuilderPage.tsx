@@ -122,12 +122,17 @@ export function QuoteBuilderPage({
         const detail = [request.contactName, request.email, request.locations].filter(Boolean).join(' · ')
         return {
           value: request.id,
-          label: detail ? `${company} - ${detail}` : company,
+          label: (
+            <span className="fortnox-request-contact-option" title={detail ? `${company} - ${detail}` : company}>
+              {detail ? `${company} - ${detail}` : company}
+            </span>
+          ),
           sortLabel: company,
+          title: detail ? `${company} - ${detail}` : company,
         }
       })
       .sort((left, right) => left.sortLabel.localeCompare(right.sortLabel, undefined, { sensitivity: 'base' }))
-      .map(({ value, label }) => ({ value, label })),
+      .map(({ value, label, title }) => ({ value, label, title })),
     [requests],
   )
 
@@ -237,6 +242,7 @@ export function QuoteBuilderPage({
               <Select
                 allowClear
                 onChange={(value) => selectRequestContact(value)}
+                optionFilterProp="title"
                 options={requestOptions}
                 placeholder="Pick from Requests"
                 showSearch

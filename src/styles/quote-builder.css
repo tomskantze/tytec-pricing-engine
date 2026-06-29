@@ -11,6 +11,7 @@
 .fortnox-quote-customer-strip label {
   display: grid;
   gap: 6px;
+  min-width: 0;
 }
 
 .fortnox-quote-customer-strip label > span {
@@ -25,6 +26,23 @@
 .fortnox-quote-customer-strip .ant-select,
 .fortnox-quote-customer-strip .ant-input {
   width: 100%;
+}
+
+.fortnox-quote-customer-strip .ant-select-selector,
+.fortnox-quote-customer-strip .ant-select-selection-item {
+  min-width: 0;
+}
+
+.fortnox-quote-customer-strip .ant-select-selection-item,
+.fortnox-request-contact-option {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fortnox-request-contact-option {
+  max-width: min(520px, calc(100vw - 96px));
 }
 
 .fortnox-quote-new-customer {
