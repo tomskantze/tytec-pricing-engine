@@ -1,34 +1,29 @@
 import { withAkamaiDefaults } from "../data/akamaiCustomer";
 import { defaultTelesolCustomers, splitSharedTelesolLocationCards, telesolCustomer, telesolUsCustomer } from "../data/telesolCustomer";
-import { defaultFortnoxArticles, withFortnoxArticleDefaults } from "../domain/fortnoxArticles";
-import type { FortnoxArticleMap } from "../domain/fortnoxArticles";
+import { defaultFortnoxArticles, withFortnoxArticleDefaults, type FortnoxArticleMap } from "../domain/fortnoxArticles";
 import { ensureUniqueJobIds } from "../domain/jobIds";
 import type { Customer, JiraIssue, JobInput, JobReviewOverride } from "../domain/types";
 import type { SavedQuote } from "../modules/fortnox/quoteTypes";
 import { repairCreatedJobFromRaw } from "../modules/create-job/createJobParser";
 import { normalizeQuote } from "./quoteState";
+import { normalizeRequestStatuses, type ServiceRequestRecord } from "../modules/requests/requestTypes";
 
-export type ActiveView = "home" | "customers" | "fortnox" | "quote-builder";
+export type ActiveView = "home" | "requests" | "customers" | "fortnox" | "quote-builder";
 export type CustomerWorkspaceTab = "profile" | "rate-cards" | "create-job" | "invoices" | "review-queue" | "technicians"; export type QuoteBuilderTab = "builder" | "saved";
 
 export type AppState = {
   activeView: ActiveView;
   customers: Customer[];
   fortnoxArticles: FortnoxArticleMap;
-  selectedCustomerKey: string;
-  selectedInvoiceCustomerKey: string;
-  selectedFortnoxCustomerKey: string;
+  requests: ServiceRequestRecord[];
+  selectedCustomerKey: string; selectedInvoiceCustomerKey: string; selectedFortnoxCustomerKey: string;
   quotes: SavedQuote[];
-  customerWorkspaceTab: CustomerWorkspaceTab;
-  quoteBuilderTab: QuoteBuilderTab;
+  customerWorkspaceTab: CustomerWorkspaceTab; quoteBuilderTab: QuoteBuilderTab;
   importRuns: ImportRun[];
   activeImportRunId: string;
   customerJobs: JobInput[];
   jiraIssues: JiraIssue[];
-  customerReportHeaders: string[];
-  customerReportFileName: string;
-  customerReportSheetName: string;
-  jiraFileName: string;
+  customerReportHeaders: string[]; customerReportFileName: string; customerReportSheetName: string; jiraFileName: string;
   jobReviewOverrides: Record<string, JobReviewOverride>;
   jobs: JobInput[];
   includeSla: boolean;
@@ -79,6 +74,7 @@ export const initialState: AppState = {
   activeView: "home",
   customers: defaultTelesolCustomers,
   fortnoxArticles: defaultFortnoxArticles,
+  requests: [],
   selectedCustomerKey: "",
   selectedInvoiceCustomerKey: "",
   selectedFortnoxCustomerKey: "",
@@ -247,9 +243,11 @@ export function hydrateState(parsed: PersistedState): AppState {
         parsed.activeView === "fortnox" ? "fortnox"
         : parsed.activeView === "quote-builder" ? "quote-builder"
         : parsed.activeView === "customers" ? "customers"
+        : parsed.activeView === "requests" ? "requests"
         : "home",
       customers,
       fortnoxArticles: withFortnoxArticleDefaults(parsed.fortnoxArticles),
+      requests: normalizeRequestStatuses(Array.isArray(parsed.requests) ? parsed.requests : []),
       selectedCustomerKey,
       selectedInvoiceCustomerKey,
       selectedFortnoxCustomerKey: parsed.selectedFortnoxCustomerKey || "",
@@ -290,7 +288,7 @@ export function loadState(): AppState {
 }
 
 export function saveState(state: AppState): void {
-  const persisted: AppState = { ...state, activeView: state.activeView };
+  const persisted: AppState = { ...state, activeView: state.activeView, requests: normalizeRequestStatuses(state.requests) };
   window.localStorage.setItem(storageKey, JSON.stringify(persisted));
 }
 

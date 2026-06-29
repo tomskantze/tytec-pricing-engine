@@ -3,6 +3,25 @@ export type QuoteBillingModel = 'hourly' | 'callout-hourly' | 'full-day' | 'fixe
 export type QuoteTravelMode = 'mileage' | 'air' | 'rail' | 'ferry' | 'rental-car' | 'taxi'
 export type QuoteRateSource = 'preset' | 'manual'
 export type QuoteTechCostSource = 'manual' | 'saved'
+export type QuoteResponsibility = 'tbd' | 'customer' | 'tytec'
+
+export type QuoteWorkPackage = {
+  id: string
+  label: string
+  packageType: string
+  pickupLocation: string
+  deliveryLocation: string
+  schedule: string
+  technicians: number | null
+  serviceWindow: string
+  logisticsOwner: QuoteResponsibility
+  shippingLabelsOwner: QuoteResponsibility
+  insuranceOwner: QuoteResponsibility
+  packingOwner: QuoteResponsibility
+  remoteSupportRequired: boolean
+  accessNotes: string
+  customerNote: string
+}
 
 export type QuoteTravelGroup = {
   id: string
@@ -42,10 +61,16 @@ export type QuoteExtraItem = {
 export type QuoteDraft = {
   quoteRef: string
   quoteName: string
+  customerContactName: string
+  customerContactEmail: string
   workLocation: string
   currency: string
   deliveryMode: QuoteDeliveryMode
   serviceType: string
+  quoteValidityDays: number | null
+  billToEntity: string
+  vatNumber: string
+  poRequirement: string
   technicianCount: number | null
   workDays: number | null
   hoursPerDay: number | null
@@ -72,6 +97,7 @@ export type QuoteDraft = {
   travelRequired: boolean
   travelGroups: QuoteTravelGroup[]
   travelCustomerNote: string
+  workPackages: QuoteWorkPackage[]
   consumables: number | null
   consumablesNote: string
   equipmentLabel: string
@@ -171,6 +197,26 @@ export function createQuoteExtraItem(index: number): QuoteExtraItem {
   }
 }
 
+export function createQuoteWorkPackage(index: number): QuoteWorkPackage {
+  return {
+    id: `quote-package-${Date.now()}-${index}`,
+    label: `Work package ${index}`,
+    packageType: 'Move / logistics',
+    pickupLocation: '',
+    deliveryLocation: '',
+    schedule: '',
+    technicians: 1,
+    serviceWindow: 'Business hours',
+    logisticsOwner: 'tbd',
+    shippingLabelsOwner: 'tbd',
+    insuranceOwner: 'tbd',
+    packingOwner: 'tbd',
+    remoteSupportRequired: true,
+    accessNotes: '',
+    customerNote: '',
+  }
+}
+
 export function createQuoteDraftDefaults(defaults?: {
   currency?: string
   rateCardLocationId?: string
@@ -180,10 +226,16 @@ export function createQuoteDraftDefaults(defaults?: {
   return {
     quoteRef: defaults?.quoteRef || createDefaultQuoteRef(defaults?.customerKey),
     quoteName: '',
+    customerContactName: '',
+    customerContactEmail: '',
     workLocation: '',
     currency: defaults?.currency || 'EUR',
     deliveryMode: 'Onsite',
     serviceType: 'Break-fix',
+    quoteValidityDays: 30,
+    billToEntity: '',
+    vatNumber: '',
+    poRequirement: '',
     technicianCount: 1,
     workDays: 1,
     hoursPerDay: 4,
@@ -210,6 +262,7 @@ export function createQuoteDraftDefaults(defaults?: {
     travelRequired: true,
     travelGroups: [createTravelGroup(1)],
     travelCustomerNote: '',
+    workPackages: [],
     consumables: 0,
     consumablesNote: '',
     equipmentLabel: '',

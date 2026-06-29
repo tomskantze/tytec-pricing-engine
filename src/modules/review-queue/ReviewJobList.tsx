@@ -6,7 +6,9 @@ import { ErpDataTable } from '../../design-system/ErpDataTable'
 import type { ErpTableColumn } from '../../design-system/ErpDataTable'
 
 function reasonFor(job: PricedJob) {
-  return job.manualReasons.join('; ') || job.reviewOverride?.note || 'Manual override applied'
+  return job.manualReasons.join('; ')
+    || job.reviewOverride?.note
+    || (job.reviewOverride?.forceReview ? 'Manual review requested' : 'Review required')
 }
 
 function searchable(job: PricedJob) {

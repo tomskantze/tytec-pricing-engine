@@ -10,6 +10,7 @@ import { buildCustomerQuoteHtml } from './quoteDocument'
 import {
   createQuoteDraftDefaults,
   createQuoteExtraItem,
+  createQuoteWorkPackage,
   createTravelGroup,
   defaultQuoteAssumptions,
   type QuoteBillingModel,
@@ -17,9 +18,11 @@ import {
   type QuoteDraft,
   type QuoteExtraItem,
   type QuoteRateSource,
+  type QuoteResponsibility,
   type QuoteTechCostSource,
   type QuoteTravelGroup,
   type QuoteTravelMode,
+  type QuoteWorkPackage,
   type SavedQuote,
 } from './quoteTypes'
 
@@ -42,6 +45,22 @@ type RatePreset = {
   includedHours: number
 }
 type SummaryLine = { label: string; amount: number }
+
+const responsibilityOptions: Array<{ value: QuoteResponsibility; label: string }> = [
+  { value: 'tbd', label: 'TBD' },
+  { value: 'customer', label: 'Customer' },
+  { value: 'tytec', label: 'Tytec' },
+]
+
+const workPackageTypeOptions = [
+  'Move / logistics',
+  'De-install',
+  'Re-rack / install',
+  'Hardware procurement',
+  'SSD installation',
+  'Survey',
+  'Other',
+].map((value) => ({ value, label: value }))
 
 function numberValue(value: number | string | null): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
@@ -134,6 +153,25 @@ function line(label: string, amount: number): SummaryLine | null {
 
 function detailText(label: string, value: string) {
   return value ? `${label}: ${value}` : ''
+}
+
+function responsibilityLabel(value: QuoteResponsibility) {
+  if (value === 'customer') return 'Customer'
+  if (value === 'tytec') return 'Tytec'
+  return 'TBD'
+}
+
+function hasWorkPackageContent(item: QuoteWorkPackage) {
+  return Boolean(
+    item.label.trim()
+    || item.packageType.trim()
+    || item.pickupLocation.trim()
+    || item.deliveryLocation.trim()
+    || item.schedule.trim()
+    || item.serviceWindow.trim()
+    || item.accessNotes.trim()
+    || item.customerNote.trim(),
+  )
 }
 
 function BooleanChoice({
@@ -255,10 +293,16 @@ export function QuoteBuilderModule({
   const [draftReady, setDraftReady] = useState(false)
   const [quoteRef, setQuoteRef] = useState(customerDefaults.quoteRef)
   const [quoteName, setQuoteName] = useState('')
+  const [customerContactName, setCustomerContactName] = useState('')
+  const [customerContactEmail, setCustomerContactEmail] = useState('')
   const [workLocation, setWorkLocation] = useState('')
   const [currency, setCurrency] = useState(customerDefaults.currency)
   const [deliveryMode, setDeliveryMode] = useState<QuoteDeliveryMode>('Onsite')
   const [serviceType, setServiceType] = useState('Break-fix')
+  const [quoteValidityDays, setQuoteValidityDays] = useState<number | null>(30)
+  const [billToEntity, setBillToEntity] = useState('')
+  const [vatNumber, setVatNumber] = useState('')
+  const [poRequirement, setPoRequirement] = useState('')
   const [technicianCount, setTechnicianCount] = useState<number | null>(1)
   const [workDays, setWorkDays] = useState<number | null>(1)
   const [hoursPerDay, setHoursPerDay] = useState<number | null>(4)
@@ -285,6 +329,7 @@ export function QuoteBuilderModule({
   const [travelRequired, setTravelRequired] = useState(true)
   const [travelGroups, setTravelGroups] = useState<QuoteTravelGroup[]>([createTravelGroup(1)])
   const [travelCustomerNote, setTravelCustomerNote] = useState('')
+  const [workPackages, setWorkPackages] = useState<QuoteWorkPackage[]>([])
   const [consumables, setConsumables] = useState<number | null>(0)
   const [consumablesNote, setConsumablesNote] = useState('')
   const [equipmentLabel, setEquipmentLabel] = useState('')
@@ -332,6 +377,7 @@ export function QuoteBuilderModule({
   useEffect(() => {
     if (!activeCustomer) return
     setDraftReady(false)
+    setActiveQuoteId('')
     const defaults = {
       currency: activeCustomer.locationCards[0]?.currency || 'EUR',
       rateCardLocationId: activeCustomer.locationCards[0]?.id || '',
@@ -590,15 +636,20 @@ export function QuoteBuilderModule({
     return [...travelDetails, ...extras].join('\n')
   }, [consumablesNote, consumablesSubtotal, currency, equipmentDays, equipmentLabel, equipmentNote, equipmentRate, equipmentSubtotal, extraItemLines, travelGroups, travelRequired])
 
-  const stepItems = [{ title: 'Basics' }, { title: 'Labor' }, { title: 'Travel' }, { title: 'Extras' }, { title: 'Review' }, { title: 'Margin' }]
+  const stepItems = [{ title: 'Basics' }, { title: 'Packages' }, { title: 'Labor' }, { title: 'Travel' }, { title: 'Extras' }, { title: 'Review' }, { title: 'Margin' }]
 
   const customerDocumentBasics = [
     { label: 'Customer', value: activeCustomer?.name || '-' },
+    customerContactName.trim() ? { label: 'Contact', value: customerContactName.trim() } : null,
+    customerContactEmail.trim() ? { label: 'Contact email', value: customerContactEmail.trim() } : null,
     { label: 'Work location', value: workLocation || '-' },
     { label: 'Service type', value: serviceType },
     { label: 'Delivery mode', value: deliveryMode },
     { label: 'Quote currency', value: currency },
-  ]
+    billToEntity.trim() ? { label: 'Bill-to entity', value: billToEntity.trim() } : null,
+    vatNumber.trim() ? { label: 'VAT / tax ID', value: vatNumber.trim() } : null,
+    poRequirement.trim() ? { label: 'PO requirement', value: poRequirement.trim() } : null,
+  ].filter(Boolean) as Array<{ label: string; value: string }>
   const usesHourlyBuckets = billingModel === 'hourly' || billingModel === 'callout-hourly'
   const customerLaborTariffRows = isSupportTariffQuote ? [
     {
@@ -620,6 +671,31 @@ export function QuoteBuilderModule({
       includedHours: billingModel === 'callout-hourly' ? `${resolvedWeekendIncludedHours.toFixed(2)} h` : '-',
     },
   ] : []
+  const customerWorkPackages = workPackages
+    .filter(hasWorkPackageContent)
+    .map((item) => {
+      const responsibilityDetails = [
+        `Logistics: ${responsibilityLabel(item.logisticsOwner)}`,
+        `Shipping labels: ${responsibilityLabel(item.shippingLabelsOwner)}`,
+        `Insurance: ${responsibilityLabel(item.insuranceOwner)}`,
+        `Packing materials: ${responsibilityLabel(item.packingOwner)}`,
+      ].join(' · ')
+      return {
+        id: item.id,
+        title: item.label.trim() || item.packageType || 'Work package',
+        type: item.packageType || '-',
+        route: [item.pickupLocation.trim(), item.deliveryLocation.trim()].filter(Boolean).join(' -> ') || '-',
+        timing: item.schedule.trim() || '-',
+        technicians: item.technicians ? `${item.technicians}` : '-',
+        serviceWindow: item.serviceWindow.trim() || '-',
+        details: [
+          responsibilityDetails,
+          item.remoteSupportRequired ? 'Remote customer support required' : 'Remote customer support not required',
+          item.accessNotes.trim() ? `Access notes: ${item.accessNotes.trim()}` : '',
+          item.customerNote.trim() ? item.customerNote.trim() : '',
+        ].filter(Boolean),
+      }
+    })
   const customerLaborDetails = [
     `Technicians: ${technicians}`,
     isSupportTariffQuote ? 'Coverage model: single technician call-out tariff' : '',
@@ -679,10 +755,16 @@ export function QuoteBuilderModule({
     return {
       quoteRef,
       quoteName,
+      customerContactName,
+      customerContactEmail,
       workLocation,
       currency,
       deliveryMode,
       serviceType,
+      quoteValidityDays,
+      billToEntity,
+      vatNumber,
+      poRequirement,
       technicianCount,
       workDays,
       hoursPerDay,
@@ -709,6 +791,7 @@ export function QuoteBuilderModule({
       travelRequired,
       travelGroups,
       travelCustomerNote,
+      workPackages,
       consumables,
       consumablesNote,
       equipmentLabel,
@@ -733,10 +816,16 @@ export function QuoteBuilderModule({
     setStep(nextStep)
     setQuoteRef(draft.quoteRef)
     setQuoteName(draft.quoteName)
+    setCustomerContactName(draft.customerContactName || '')
+    setCustomerContactEmail(draft.customerContactEmail || '')
     setWorkLocation(draft.workLocation)
     setCurrency(draft.currency)
     setDeliveryMode(draft.deliveryMode)
     setServiceType(draft.serviceType)
+    setQuoteValidityDays(draft.quoteValidityDays ?? 30)
+    setBillToEntity(draft.billToEntity || '')
+    setVatNumber(draft.vatNumber || '')
+    setPoRequirement(draft.poRequirement || '')
     setTechnicianCount(draft.technicianCount)
     setWorkDays(draft.workDays)
     setHoursPerDay(draft.hoursPerDay)
@@ -763,6 +852,7 @@ export function QuoteBuilderModule({
     setTravelRequired(draft.travelRequired)
     setTravelGroups(draft.travelGroups.length ? draft.travelGroups : [createTravelGroup(1)])
     setTravelCustomerNote(draft.travelCustomerNote)
+    setWorkPackages(draft.workPackages || [])
     setConsumables(draft.consumables)
     setConsumablesNote(draft.consumablesNote)
     setEquipmentLabel(draft.equipmentLabel)
@@ -866,11 +956,13 @@ export function QuoteBuilderModule({
       quoteName: quoteName.trim() || 'Quote',
       workLocation,
       currency,
+      validityDays: quoteValidityDays || 30,
       serviceType,
       deliveryMode,
       summaryText,
       assumptions,
       basics: customerDocumentBasics,
+      workPackages: customerWorkPackages,
       laborDetails: customerLaborDetails,
       laborTariffRows: customerLaborTariffRows,
       laborNote: laborCustomerNote,
@@ -929,6 +1021,18 @@ export function QuoteBuilderModule({
     setTravelGroups((current) => current.filter((group) => group.id !== groupId))
   }
 
+  function updateWorkPackage(packageId: string, patch: Partial<QuoteWorkPackage>) {
+    setWorkPackages((current) => current.map((item) => (item.id === packageId ? { ...item, ...patch } : item)))
+  }
+
+  function addWorkPackage() {
+    setWorkPackages((current) => [...current, createQuoteWorkPackage(current.length + 1)])
+  }
+
+  function removeWorkPackage(packageId: string) {
+    setWorkPackages((current) => current.filter((item) => item.id !== packageId))
+  }
+
   function updateExtraItem(itemId: string, patch: Partial<QuoteExtraItem>) {
     setExtraItems((current) => current.map((item) => (item.id === itemId ? { ...item, ...patch } : item)))
   }
@@ -946,10 +1050,16 @@ export function QuoteBuilderModule({
     [
       quoteRef,
       quoteName,
+      customerContactName,
+      customerContactEmail,
       workLocation,
       currency,
       deliveryMode,
       serviceType,
+      quoteValidityDays,
+      billToEntity,
+      vatNumber,
+      poRequirement,
       technicianCount,
       workDays,
       hoursPerDay,
@@ -976,6 +1086,7 @@ export function QuoteBuilderModule({
       travelRequired,
       travelGroups,
       travelCustomerNote,
+      workPackages,
       consumables,
       consumablesNote,
       equipmentLabel,
@@ -1001,7 +1112,7 @@ export function QuoteBuilderModule({
     })
   }, [activeCustomer, activeQuoteId, draftReady, draftSnapshot, step])
 
-  if (!activeCustomer) return <Alert message="Select a customer to start a quote." type="info" />
+  if (!activeCustomer) return null
 
   return (
     <div className="fortnox-quote-layout">
@@ -1044,6 +1155,8 @@ export function QuoteBuilderModule({
             <div className="fortnox-quote-form">
               <label><span>Quote ref</span><Input onChange={(event) => setQuoteRef(event.target.value)} placeholder="SUNSPEED-20260616-0930" value={quoteRef} /></label>
               <label><span>Quote name</span><Input onChange={(event) => setQuoteName(event.target.value)} placeholder="CUSTOMER-MONTH-YEAR-SCOPE" value={quoteName} /></label>
+              <label><span>Customer contact</span><Input onChange={(event) => setCustomerContactName(event.target.value)} placeholder="Contact name" value={customerContactName} /></label>
+              <label><span>Contact email</span><Input onChange={(event) => setCustomerContactEmail(event.target.value)} placeholder="name@example.com" value={customerContactEmail} /></label>
               <label><span>Customer location</span><Select allowClear onChange={(value) => setWorkLocation(value || '')} options={customerLocationOptions} placeholder="Pick a saved customer site" showSearch value={customerLocationOptions.some((option) => option.value === workLocation) ? workLocation : undefined} /></label>
               <label><span>Work location</span><Input onChange={(event) => setWorkLocation(event.target.value)} placeholder="Any site, city, country, or custom location" value={workLocation} /></label>
               <label><span>Currency</span><Select onChange={setCurrency} options={['SEK', 'EUR', 'NOK', 'DKK', 'USD', 'GBP'].map((value) => ({ value, label: value }))} value={currency} /></label>
@@ -1061,6 +1174,48 @@ export function QuoteBuilderModule({
           ) : null}
 
           {step === 1 ? (
+            <div className="fortnox-quote-stack">
+              <section className="fortnox-quote-subsection">
+                <div className="fortnox-quote-subsection-head">
+                  <div>
+                    <Typography.Text strong>Work Packages</Typography.Text>
+                    <div className="page-description">Use one package per route, site visit, procurement scope, or install activity.</div>
+                  </div>
+                  <Button onClick={addWorkPackage}>Add Work Package</Button>
+                </div>
+                {workPackages.length ? (
+                  <div className="fortnox-quote-stack">
+                    {workPackages.map((item, index) => (
+                      <section className="fortnox-quote-subsection fortnox-quote-package" key={item.id}>
+                        <div className="fortnox-quote-subsection-head">
+                          <Typography.Text>{item.label.trim() || `Work package ${index + 1}`}</Typography.Text>
+                          <Button onClick={() => removeWorkPackage(item.id)} size="small">Remove</Button>
+                        </div>
+                        <div className="fortnox-quote-form">
+                          <label><span>Package label</span><Input onChange={(event) => updateWorkPackage(item.id, { label: event.target.value })} placeholder="Amsterdam to Stuttgart move" value={item.label} /></label>
+                          <label><span>Package type</span><Select onChange={(value) => updateWorkPackage(item.id, { packageType: value })} options={workPackageTypeOptions} value={item.packageType || undefined} /></label>
+                          <label><span>Pickup / source</span><TextArea onChange={(event) => updateWorkPackage(item.id, { pickupLocation: event.target.value })} placeholder="Pickup site, address, room, rack, or supplier" rows={3} value={item.pickupLocation} /></label>
+                          <label><span>Delivery / destination</span><TextArea onChange={(event) => updateWorkPackage(item.id, { deliveryLocation: event.target.value })} placeholder="Destination site, address, room, rack, or install site" rows={3} value={item.deliveryLocation} /></label>
+                          <label><span>Schedule / deadline</span><Input onChange={(event) => updateWorkPackage(item.id, { schedule: event.target.value })} placeholder="Mid-July, next two weeks, exact date TBD" value={item.schedule} /></label>
+                          <label><span>Technicians</span><InputNumber min={0} onChange={(value) => updateWorkPackage(item.id, { technicians: numberValue(value) })} value={item.technicians} /></label>
+                          <label><span>Service window</span><Input onChange={(event) => updateWorkPackage(item.id, { serviceWindow: event.target.value })} placeholder="Business hours, OBH, weekend, site window TBD" value={item.serviceWindow} /></label>
+                          <BooleanChoice label="Remote support required" onChange={(checked) => updateWorkPackage(item.id, { remoteSupportRequired: checked })} value={item.remoteSupportRequired} />
+                          <label><span>Logistics owner</span><Select onChange={(value) => updateWorkPackage(item.id, { logisticsOwner: value as QuoteResponsibility })} options={responsibilityOptions} value={item.logisticsOwner} /></label>
+                          <label><span>Shipping labels</span><Select onChange={(value) => updateWorkPackage(item.id, { shippingLabelsOwner: value as QuoteResponsibility })} options={responsibilityOptions} value={item.shippingLabelsOwner} /></label>
+                          <label><span>Insurance owner</span><Select onChange={(value) => updateWorkPackage(item.id, { insuranceOwner: value as QuoteResponsibility })} options={responsibilityOptions} value={item.insuranceOwner} /></label>
+                          <label><span>Packing materials</span><Select onChange={(value) => updateWorkPackage(item.id, { packingOwner: value as QuoteResponsibility })} options={responsibilityOptions} value={item.packingOwner} /></label>
+                          <label className="fortnox-quote-form-span-2"><span>Access / dependency notes</span><TextArea onChange={(event) => updateWorkPackage(item.id, { accessNotes: event.target.value })} placeholder="Access approvals, loading dock, escort, remote hands, shutdown, rack/cabling instructions" rows={3} value={item.accessNotes} /></label>
+                          <label className="fortnox-quote-form-span-2"><span>Customer notes</span><TextArea onChange={(event) => updateWorkPackage(item.id, { customerNote: event.target.value })} placeholder="Optional package-specific note visible on the quote." rows={3} value={item.customerNote} /></label>
+                        </div>
+                      </section>
+                    ))}
+                  </div>
+                ) : <div className="page-description">No packages added. For a simple one-site quote this can be left empty.</div>}
+              </section>
+            </div>
+          ) : null}
+
+          {step === 2 ? (
             <div className="fortnox-quote-form">
               {billingModel !== 'fixed-fee' ? <label className="fortnox-quote-fit-control"><span>Rate source</span><Segmented onChange={(value) => handleRateSourceChange(value as QuoteRateSource)} options={[{ value: 'preset', label: 'Saved rate card' }, { value: 'manual', label: 'Manual' }]} value={rateSource} /></label> : null}
               <label className="fortnox-quote-fit-control"><span>Billing model</span><Segmented onChange={(value) => setBillingModel(value as QuoteBillingModel)} options={[{ value: 'hourly', label: 'Hourly' }, { value: 'callout-hourly', label: 'Call-out + Hourly' }, { value: 'full-day', label: 'Full day' }, { value: 'fixed-fee', label: 'Fixed fee' }]} value={billingModel} /></label>
@@ -1130,7 +1285,7 @@ export function QuoteBuilderModule({
             </div>
           ) : null}
 
-          {step === 2 ? (
+          {step === 3 ? (
             <div className="fortnox-quote-stack">
               {deliveryMode !== 'Remote' ? <BooleanChoice label="Travel required" onChange={setTravelRequired} value={travelRequired} /> : <Alert message="Remote work skips travel and overnight costs." type="info" />}
               {travelRequired ? (
@@ -1200,7 +1355,7 @@ export function QuoteBuilderModule({
             </div>
           ) : null}
 
-          {step === 3 ? (
+          {step === 4 ? (
             <div className="fortnox-quote-stack">
               <section className="fortnox-quote-subsection">
                 <Typography.Text strong>Consumables</Typography.Text>
@@ -1254,19 +1409,25 @@ export function QuoteBuilderModule({
                   <label><span>Markup on pass-through %</span><InputNumber min={0} onChange={(value) => setMarkupPercent(numberValue(value))} precision={2} value={markupPercent} /></label>
                   <label><span>Risk buffer %</span><InputNumber min={0} onChange={(value) => setContingencyPercent(numberValue(value))} precision={2} value={contingencyPercent} /></label>
                   <label><span>Discount %</span><InputNumber min={0} onChange={(value) => setDiscountPercent(numberValue(value))} precision={2} value={discountPercent} /></label>
+                  <label><span>Quote validity days</span><InputNumber min={1} onChange={(value) => setQuoteValidityDays(numberValue(value))} value={quoteValidityDays} /></label>
+                  <label><span>Bill-to entity</span><Input onChange={(event) => setBillToEntity(event.target.value)} placeholder="Legal billing entity, if known" value={billToEntity} /></label>
+                  <label><span>VAT / tax ID</span><Input onChange={(event) => setVatNumber(event.target.value)} placeholder="VAT number, tax ID, or TBD" value={vatNumber} /></label>
+                  <label className="fortnox-quote-form-span-2"><span>PO / payment requirement</span><Input onChange={(event) => setPoRequirement(event.target.value)} placeholder="PO required before dispatch, payment terms, invoice notes" value={poRequirement} /></label>
                 </div>
               </section>
               <label className="fortnox-quote-form-span-2"><span>Extras notes to customer</span><TextArea onChange={(event) => setExtrasCustomerNote(event.target.value)} placeholder="Optional customer-facing note for materials, rentals, pass-through assumptions, or exclusions." rows={3} value={extrasCustomerNote} /></label>
             </div>
           ) : null}
 
-          {step === 4 ? (
+          {step === 5 ? (
             <div className="fortnox-quote-stack">
                 <div className="review-info-grid">
                   <div className="info-field"><span>Customer</span><strong>{activeCustomer.name}</strong></div>
                   <div className="info-field"><span>Work location</span><strong>{workLocation || '-'}</strong></div>
                   <div className="info-field"><span>Service type</span><strong>{serviceType}</strong></div>
                   <div className="info-field"><span>Delivery</span><strong>{deliveryMode}</strong></div>
+                  <div className="info-field"><span>Work packages</span><strong>{customerWorkPackages.length}</strong></div>
+                  <div className="info-field"><span>Valid for</span><strong>{quoteValidityDays || 30} days</strong></div>
                   <div className="info-field"><span>Labor shape</span><strong>{billingModel}</strong></div>
                   <div className="info-field"><span>Rate basis</span><strong>{billingModel === 'fixed-fee' ? 'Fixed fee' : rateSource === 'manual' ? 'Manual rate' : `${selectedRateCardLocation ? getLocationLabel(selectedRateCardLocation) : '-'} · ${selectedPreset?.label || 'Unselected'}`}</strong></div>
                   {billingModel === 'callout-hourly' ? <div className="info-field"><span>08:00-18:00 minimum</span><strong>{formatAmount(currency, resolvedCallOut)}</strong></div> : null}
@@ -1310,6 +1471,37 @@ export function QuoteBuilderModule({
                   <Typography.Text strong>Scope Summary</Typography.Text>
                   <div className="create-job-note-copy fortnox-quote-summary-copy">{summaryText || 'No summary provided yet.'}</div>
                 </section>
+                {customerWorkPackages.length ? (
+                  <section className="fortnox-quote-doc-section">
+                    <Typography.Text strong>Work Packages</Typography.Text>
+                    <table className="fortnox-quote-doc-table fortnox-quote-package-table">
+                      <colgroup>
+                        <col style={{ width: '22%' }} />
+                        <col style={{ width: '28%' }} />
+                        <col style={{ width: '16%' }} />
+                        <col style={{ width: '34%' }} />
+                      </colgroup>
+                      <thead>
+                        <tr>
+                          <th>Package</th>
+                          <th>Route / Site</th>
+                          <th>Timing</th>
+                          <th>Details</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {customerWorkPackages.map((item) => (
+                          <tr key={item.id}>
+                            <td><strong>{item.title}</strong><br />{item.type}</td>
+                            <td>{item.route}</td>
+                            <td>{item.timing}<br />{item.serviceWindow}</td>
+                            <td>{item.technicians === '-' ? '-' : `${item.technicians} tech${item.technicians === '1' ? '' : 's'}`}<br />{item.details.join(' · ')}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </section>
+                ) : null}
                 <section className="fortnox-quote-doc-section">
                   <Typography.Text strong>Labor</Typography.Text>
                   {customerLaborDetails.length ? (
@@ -1391,7 +1583,7 @@ export function QuoteBuilderModule({
             </div>
           ) : null}
 
-          {step === 5 ? (
+          {step === 6 ? (
             <div className="fortnox-quote-stack">
               <section className="fortnox-quote-subsection">
                 <Typography.Text strong>Technician Cost Basis</Typography.Text>
@@ -1431,6 +1623,7 @@ export function QuoteBuilderModule({
           </div>
           <div className="review-info-grid">
             <div className="info-field"><span>Workload</span><strong>{isSupportTariffQuote ? 'Single technician tariff quote' : usesHourlyBuckets ? `${technicians} tech · ${standardLaborHours.toFixed(2)} std h${obhLaborHours > 0 ? ` · ${obhLaborHours.toFixed(2)} obh` : ''}${weekendLaborHours > 0 ? ` · ${weekendLaborHours.toFixed(2)} wknd` : ''}` : `${days} days · ${dayHours.toFixed(2)} h/day · ${technicians} tech`}</strong></div>
+            <div className="info-field"><span>Packages</span><strong>{customerWorkPackages.length || '-'}</strong></div>
             <div className="info-field"><span>Labor hours</span><strong>{isSupportTariffQuote ? '-' : `${laborHours.toFixed(2)} h`}</strong></div>
             <div className="info-field"><span>Selected rate</span><strong>{billingModel === 'fixed-fee' ? formatAmount(currency, fixedFee || 0) : formatAmount(currency, resolvedRate)}</strong></div>
             <div className="info-field"><span>08:00-18:00 min.</span><strong>{billingModel === 'callout-hourly' ? formatAmount(currency, resolvedCallOut) : '-'}</strong></div>

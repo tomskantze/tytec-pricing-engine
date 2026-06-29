@@ -21,6 +21,12 @@ function field(label: string, value: string) {
   )
 }
 
+function reviewReason(job: PricedJob) {
+  return job.manualReasons.join('; ')
+    || job.reviewOverride?.note
+    || (job.reviewOverride?.forceReview ? 'Manual review requested' : 'No review needed')
+}
+
 export function ReviewDetailPanel({
   customer,
   job,
@@ -87,7 +93,7 @@ export function ReviewDetailPanel({
         <section>
           <h3 className="section-title">Pricing Basis</h3>
           <div className="review-info-grid">
-            {field('Review Reason', activeJob.manualReasons.join('; ') || activeJob.reviewOverride?.note || 'Manual override applied')}
+            {field('Review Reason', reviewReason(activeJob))}
             {field('Matched Location', activeJob.matchedLocation ? getLocationLabel(activeJob.matchedLocation) : '-')}
             {field('Original Location', [activeJob.city, activeJob.country].filter(Boolean).join(', '))}
             {field('Invoice Period', String(activeJob.raw.vendorInvoicePeriod || '').trim() || '-')}
@@ -111,6 +117,10 @@ export function ReviewDetailPanel({
         <section>
           <h3 className="section-title">Stored Notes</h3>
           <div className="review-stored-notes-stack">
+            <div className="create-job-note-block">
+              <h3 className="section-title">Jira Summary</h3>
+              <div className="create-job-note-copy">{activeJob.jiraSummary || activeJob.raw.summary || activeJob.summary || '-'}</div>
+            </div>
             <div className="create-job-note-block review-sow-panel">
               <h3 className="section-title">Scope / SOW</h3>
               <div className="create-job-note-copy review-sow-copy">{activeJob.sow || '-'}</div>

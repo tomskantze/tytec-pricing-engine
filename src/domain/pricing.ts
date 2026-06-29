@@ -187,16 +187,23 @@ function overrideNumber(value: number | undefined): number | null {
   return typeof value === "number" && Number.isFinite(value) ? roundMoney(value) : null;
 }
 
+function rawNumber(value: string | undefined): number | null {
+  const amount = Number(value || "");
+  return Number.isFinite(amount) && amount > 0 ? roundMoney(amount) : null;
+}
+
 export function priceJob(customer: Customer, job: JobInput, override?: JobReviewOverride, fortnoxArticles?: FortnoxArticleMap): PricedJob {
   const matchedLocation = getOverrideLocation(customer, override) || getMatchedLocationCard(customer, job);
+  const rawManualLabor = rawNumber(job.raw.manualLaborTotal);
+  const rawManualCurrency = String(job.raw.manualCurrency || "").trim();
   const manualFinal = overrideNumber(override?.manualFinalAmount);
-  const manualLabor = overrideNumber(override?.manualLaborAmount);
+  const manualLabor = overrideNumber(override?.manualLaborAmount) ?? rawManualLabor;
   const manualTravel = overrideNumber(override?.manualTravelAmount);
   const manualConsumables = overrideNumber(override?.manualConsumablesAmount);
   const hasManualAmounts = [manualLabor, manualTravel, manualConsumables].some((value) => value != null);
 
   if (manualFinal != null) {
-    const currency = matchedLocation?.currency || "EUR";
+    const currency = matchedLocation?.currency || rawManualCurrency || "EUR";
     return {
       ...job,
       reviewOverride: override,
@@ -214,7 +221,7 @@ export function priceJob(customer: Customer, job: JobInput, override?: JobReview
 
   const manualReasons = getManualReasons(customer, job, matchedLocation);
   const pricing = matchedLocation ? getPricingBreakdown(customer, matchedLocation, job, fortnoxArticles, override) : null;
-  const currency = matchedLocation?.currency || "EUR";
+  const currency = matchedLocation?.currency || rawManualCurrency || "EUR";
   const isReviewHold = Boolean(override?.forceReview && !override.approved && !hasManualAmounts);
   const laborAmount = manualLabor ?? (isReviewHold ? null : pricing?.totalAmount ?? null);
   const travelAmount = manualTravel ?? 0;

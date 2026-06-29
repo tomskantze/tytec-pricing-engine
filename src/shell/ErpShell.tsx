@@ -14,6 +14,7 @@ export function ErpShell({
   onOpenCustomers,
   onOpenCustomerTab,
   onOpenHome,
+  onOpenRequests,
   onOpenFortnox,
   onOpenQuoteTab,
   children,
@@ -33,6 +34,7 @@ export function ErpShell({
   onOpenCustomers: () => void
   onOpenCustomerTab: (customerKey: string, tab: CustomerWorkspaceTab) => void
   onOpenHome: () => void
+  onOpenRequests: () => void
   onOpenFortnox: () => void
   onOpenQuoteTab: (tab: QuoteBuilderTab) => void
   children: ReactNode
@@ -48,6 +50,7 @@ export function ErpShell({
           onOpenCustomer={onOpenCustomer}
           onOpenCustomerTab={onOpenCustomerTab}
           onOpenHome={onOpenHome}
+          onOpenRequests={onOpenRequests}
           onOpenCustomers={onOpenCustomers}
           onOpenFortnox={onOpenFortnox}
           onOpenQuoteTab={onOpenQuoteTab}

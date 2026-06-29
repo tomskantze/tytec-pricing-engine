@@ -6,6 +6,7 @@ import {
   FileTextOutlined,
   IdcardOutlined,
   LeftOutlined,
+  MailOutlined,
   RightOutlined,
   SaveOutlined,
   TableOutlined,
@@ -64,6 +65,7 @@ export function NavigationPanel({
   onOpenCustomer,
   onOpenCustomerTab,
   onOpenHome,
+  onOpenRequests,
   onOpenCustomers,
   onOpenFortnox,
   onOpenQuoteTab,
@@ -76,6 +78,7 @@ export function NavigationPanel({
   onOpenCustomer: (customerKey: string) => void
   onOpenCustomerTab: (customerKey: string, tab: CustomerWorkspaceTab) => void
   onOpenHome: () => void
+  onOpenRequests: () => void
   onOpenCustomers: () => void
   onOpenFortnox: () => void
   onOpenQuoteTab: (tab: QuoteBuilderTab) => void
@@ -86,6 +89,7 @@ export function NavigationPanel({
   const [expandedCustomerKey, setExpandedCustomerKey] = useState<string | null>(selectedCustomerKey || null)
   const [expandedSections, setExpandedSections] = useState<Record<ActiveView, boolean>>({
     home: false,
+    requests: false,
     customers: true,
     fortnox: false,
     'quote-builder': false,
@@ -106,6 +110,14 @@ export function NavigationPanel({
       icon: <HomeOutlined />,
       active: activeView === 'home',
       onClick: onOpenHome,
+      children: [],
+    },
+    {
+      key: 'requests',
+      label: 'Requests',
+      icon: <MailOutlined />,
+      active: activeView === 'requests',
+      onClick: onOpenRequests,
       children: [],
     },
     {
@@ -163,7 +175,7 @@ export function NavigationPanel({
         },
       ],
     },
-  ], [activeView, onOpenCustomers, onOpenFortnox, onOpenHome, onOpenQuoteTab, quoteBuilderTab, selectedCustomerKey])
+  ], [activeView, onOpenCustomers, onOpenFortnox, onOpenHome, onOpenQuoteTab, onOpenRequests, quoteBuilderTab, selectedCustomerKey])
 
   function toggleSection(sectionKey: ActiveView) {
     setExpandedSections((current) => ({ ...current, [sectionKey]: !current[sectionKey] }))

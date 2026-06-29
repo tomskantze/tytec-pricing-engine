@@ -1,15 +1,11 @@
-import { Button, Card, Input, Typography } from 'antd'
+import { Button, Card, Input, Select, Space } from 'antd'
 import { useMemo, useState } from 'react'
 import type { Customer, InvoiceMode } from '../../domain/types'
 import { PageHeader } from '../../design-system/PageHeader'
-import { CustomerIndexTable } from '../customers/CustomerIndexTable'
 import type { QuoteBuilderTab } from '../../state/appState'
 import type { SavedQuote } from './quoteTypes'
 import { QuoteBuilderModule } from './QuoteBuilderModule'
 import { SavedQuotesPanel } from './SavedQuotesPanel'
-
-type QuoteBuilderView = 'launch' | 'editor'
-type QuoteCustomerMode = 'existing' | 'manual'
 
 type DesktopQuotePageApi = {
   saveAsDocument?: (payload: { storedPath: string; fileName: string }) => Promise<string>
@@ -41,7 +37,7 @@ function createQuoteCustomerStub(name: string, customerKey: string): Customer {
   }
 }
 
-export function FortnoxQuotePage({
+export function QuoteBuilderPage({
   activeTab,
   customers,
   quotes,
@@ -58,19 +54,27 @@ export function FortnoxQuotePage({
   onSelectCustomer: (customerKey: string) => void
   onSelectTab: (tab: QuoteBuilderTab) => void
 }) {
-  const [builderView, setBuilderView] = useState<QuoteBuilderView>('launch')
-  const [builderStartMode, setBuilderStartMode] = useState<'draft' | 'new'>('draft')
-  const [customerMode, setCustomerMode] = useState<QuoteCustomerMode>('existing')
+  const [builderStartMode, setBuilderStartMode] = useState<'draft' | 'new'>('new')
   const [manualCustomerName, setManualCustomerName] = useState('')
   const [manualCustomerKey, setManualCustomerKey] = useState('')
   const [editorCustomer, setEditorCustomer] = useState<Customer | null>(null)
   const [requestedQuoteId, setRequestedQuoteId] = useState('')
+  const [builderInstanceKey, setBuilderInstanceKey] = useState(0)
   const manualCustomer = useMemo(() => {
     const trimmedName = manualCustomerName.trim()
     if (!trimmedName) return null
     return createQuoteCustomerStub(trimmedName, normalizeManualCustomerKey(trimmedName, manualCustomerKey.trim()))
   }, [manualCustomerKey, manualCustomerName])
   const visibleSavedQuotes = quotes
+  const selectedExistingCustomerKey = customers.some((customer) => customer.customerKey === editorCustomer?.customerKey)
+    ? editorCustomer?.customerKey
+    : undefined
+  const customerOptions = useMemo(
+    () => [...customers]
+      .sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: 'base' }))
+      .map((customer) => ({ value: customer.customerKey, label: customer.name })),
+    [customers],
+  )
 
   async function saveQuotePdfAs(quoteId: string) {
     const quote = quotes.find((item) => item.id === quoteId)
@@ -88,92 +92,54 @@ export function FortnoxQuotePage({
     return existingCustomer || createQuoteCustomerStub(quote.customerName, quote.customerKey)
   }
 
-  const showLaunch = activeTab === 'builder' && builderView === 'launch'
+  function selectExistingCustomer(customerKey?: string) {
+    const selectedCustomer = customers.find((item) => item.customerKey === customerKey) ?? null
+    setEditorCustomer(selectedCustomer)
+    setRequestedQuoteId('')
+    setBuilderStartMode('new')
+    setManualCustomerName('')
+    setManualCustomerKey('')
+    setBuilderInstanceKey((current) => current + 1)
+    if (selectedCustomer) onSelectCustomer(selectedCustomer.customerKey)
+  }
+
+  function useManualCustomer() {
+    if (!manualCustomer) return
+    setEditorCustomer(manualCustomer)
+    setRequestedQuoteId('')
+    setBuilderStartMode('new')
+    setBuilderInstanceKey((current) => current + 1)
+    onSelectTab('builder')
+  }
 
   return (
     <>
       <PageHeader title="Quote Builder" />
-      {showLaunch ? (
-        <>
-          {customerMode === 'manual' ? (
-            <Card className="workspace-card" variant="borderless">
-              <section className="fortnox-quote-panel fortnox-quote-launch">
-                <div className="fortnox-quote-doc-head">
-                  <div>
-                    <Typography.Text strong>One-off Quote</Typography.Text>
-                    <div className="page-description">This does not create a customer record. Use it when the customer is not yet in the system.</div>
-                  </div>
-                </div>
-                <div className="fortnox-quote-launch-bar">
-                  <div className="fortnox-quote-launch-controls">
-                    <Input
-                      onChange={(event) => setManualCustomerName(event.target.value)}
-                      placeholder="Customer name"
-                      value={manualCustomerName}
-                    />
-                    <Input
-                      onChange={(event) => setManualCustomerKey(event.target.value)}
-                      placeholder="Customer key (optional)"
-                      value={manualCustomerKey}
-                    />
-                  </div>
-                  <div className="fortnox-quote-launch-actions">
-                    <Button onClick={() => {
-                      setCustomerMode('existing')
-                      setManualCustomerName('')
-                      setManualCustomerKey('')
-                    }}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      disabled={!manualCustomer}
-                      onClick={() => {
-                        setRequestedQuoteId('')
-                        setBuilderStartMode('new')
-                        setEditorCustomer(manualCustomer)
-                        setBuilderView('editor')
-                      }}
-                      type="primary"
-                    >
-                      New Quote
-                    </Button>
-                  </div>
-                </div>
-              </section>
-            </Card>
-          ) : null}
-          {customerMode === 'existing' ? (
-            <CustomerIndexTable
-              actions={<Button onClick={() => setCustomerMode('manual')}>One-off Quote</Button>}
-              customers={customers}
-              emptyText="No customers match the current search."
-              onOpenCustomer={(customerKey) => {
-                const selectedCustomer = customers.find((item) => item.customerKey === customerKey) ?? null
-                setCustomerMode('existing')
-                onSelectCustomer(customerKey)
-                if (selectedCustomer) {
-                  setRequestedQuoteId('')
-                  setBuilderStartMode('new')
-                  setEditorCustomer(selectedCustomer)
-                  setBuilderView('editor')
-                  onSelectTab('builder')
-                }
-              }}
-            />
-          ) : null}
-        </>
-      ) : (
       <Card className="workspace-card" variant="borderless">
-        {builderView === 'editor' ? (
-          <div hidden={activeTab !== 'builder'}>
+        <div hidden={activeTab !== 'builder'}>
+          <section className="fortnox-quote-customer-strip">
+            <label>
+              <span>Existing customer</span>
+              <Select
+                allowClear
+                onChange={(value) => selectExistingCustomer(value)}
+                options={customerOptions}
+                placeholder="Pick customer if already in system"
+                showSearch
+                value={selectedExistingCustomerKey}
+              />
+            </label>
+            <div className="fortnox-quote-new-customer">
+              <label><span>New customer</span><Input onChange={(event) => setManualCustomerName(event.target.value)} placeholder="Customer name" value={manualCustomerName} /></label>
+              <label><span>Customer key</span><Input onChange={(event) => setManualCustomerKey(event.target.value)} placeholder="Optional" value={manualCustomerKey} /></label>
+              <Space>
+                <Button disabled={!manualCustomer} onClick={useManualCustomer}>Use New Customer</Button>
+              </Space>
+            </div>
+          </section>
             <QuoteBuilderModule
               customer={editorCustomer}
-              onBackToLaunch={() => {
-                setBuilderView('launch')
-                setEditorCustomer(null)
-                setRequestedQuoteId('')
-              }}
+              key={`${editorCustomer?.customerKey || 'none'}-${builderInstanceKey}`}
               onDeleteQuote={onDeleteQuote}
               onQuoteLoaded={() => setRequestedQuoteId('')}
               onSaveQuote={onSaveQuote}
@@ -182,7 +148,6 @@ export function FortnoxQuotePage({
               startMode={builderStartMode}
             />
           </div>
-        ) : null}
         <div hidden={activeTab !== 'saved'}>
           <SavedQuotesPanel
               onDeleteQuote={onDeleteQuote}
@@ -191,10 +156,8 @@ export function FortnoxQuotePage({
                 if (quoteCustomer) {
                 const existingCustomer = customers.find((item) => item.customerKey === quoteCustomer.customerKey) ?? null
                 if (existingCustomer) {
-                  setCustomerMode('existing')
                   onSelectCustomer(existingCustomer.customerKey)
                 } else {
-                  setCustomerMode('manual')
                   setManualCustomerName(quoteCustomer.name)
                   setManualCustomerKey(quoteCustomer.customerKey)
                 }
@@ -202,7 +165,7 @@ export function FortnoxQuotePage({
                 }
                 setRequestedQuoteId(quoteId)
                 setBuilderStartMode('draft')
-                setBuilderView('editor')
+                setBuilderInstanceKey((current) => current + 1)
                 onSelectTab('builder')
               }}
               onSavePdfAs={saveQuotePdfAs}
@@ -210,7 +173,6 @@ export function FortnoxQuotePage({
           />
         </div>
       </Card>
-      )}
     </>
   )
 }

@@ -22,6 +22,19 @@ function itemLine(item: LineItem) {
 
 export function getPricingExplanationLines(job: PricedJob, includeArticles = true): PricingExplanationLine[] {
   const breakdown = job.pricing
+  if (!breakdown && job.raw.manualPricingMode) {
+    const hours = Number(job.raw.manualTotalHours || 0)
+    const rate = Number(job.raw.manualHourlyRate || 0)
+    const labor = job.laborAmount ?? Number(job.raw.manualLaborTotal || 0)
+    const detail = rate > 0 && hours > 0
+      ? `Manual labor: ${formatQuantity(hours)} h x ${formatAmount(job.currency, rate)} = ${formatAmount(job.currency, labor)}`
+      : `Manual labor total: ${formatAmount(job.currency, labor)}`
+    return [
+      { text: detail },
+      ...(job.consumablesAmount > 0 ? [{ text: `Consumables: ${formatAmount(job.currency, job.consumablesAmount)}` }] : []),
+      { text: `Invoice total: ${formatJobTotal(job.currency, job.totalAmount)}` },
+    ]
+  }
   if (!breakdown) return (job.manualReasons.length ? job.manualReasons : ['No automatic pricing available']).map((text) => ({ text }))
   const lines: PricingExplanationLine[] = []
   if (breakdown.callOutShift) {

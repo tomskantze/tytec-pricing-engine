@@ -1,16 +1,17 @@
-import { Button, Card, Input, InputNumber, Segmented, Select, Space, Typography } from 'antd'
+import { Button, Card, Checkbox, Input, InputNumber, Segmented, Select, Space, Typography } from 'antd'
 import { useEffect, useMemo, useState } from 'react'
 import type { FortnoxArticleMap } from '../../domain/fortnoxArticles'
 import { getLocationLabel } from '../../domain/matching'
 import { formatOptionalAmount } from '../../domain/money'
 import { priceJob } from '../../domain/pricing'
-import { getRateCardMode } from '../../domain/rateCards'
 import type { Customer, JobInput, JobReviewOverride } from '../../domain/types'
 import { CustomerSummary } from '../customers/CustomerSummary'
 import { ReviewDetailPanel } from '../review-queue/ReviewDetailPanel'
 import { PricingExplanationPanel } from '../shared/PricingExplanationPanel'
 import { CreateJobList } from './CreateJobList'
-import { createManualJobRecordDraft, parseCreateJobDraft } from './createJobParser'
+import { parseCreateJobDraft } from './createJobParser'
+import { createManualJobRecordDraft, manualOtherLocationId } from './manualJobRecord'
+import { quarterHourTimeOptions } from './timeSteps'
 
 const { TextArea } = Input
 type EntryMode = 'manual' | 'report'
@@ -31,6 +32,19 @@ function noteBlock(label: string, value: string) {
       <div className="create-job-note-copy">{value || '-'}</div>
     </section>
   )
+}
+
+function timeSelectProps(value: string, setValue: (value: string) => void) {
+  return {
+    allowClear: true,
+    className: 'create-job-time-select',
+    onChange: (next?: string) => setValue(next || ''),
+    optionFilterProp: 'label',
+    options: quarterHourTimeOptions,
+    placeholder: '--:--',
+    showSearch: true,
+    value: value || undefined,
+  }
 }
 
 export function CreateJobModule({
@@ -57,16 +71,27 @@ export function CreateJobModule({
   const [entryMode, setEntryMode] = useState<EntryMode>(() => (customer.customerKey === 'TELE' || customer.customerKey === 'TELE-US' ? 'report' : 'manual'))
   const [customerTicket, setCustomerTicket] = useState('')
   const [manualServiceDate, setManualServiceDate] = useState('')
-  const [manualLocationId, setManualLocationId] = useState(customer.locationCards[0]?.id || '')
+  const [manualLocationId, setManualLocationId] = useState(customer.locationCards[0]?.id || manualOtherLocationId)
+  const [manualOtherLocation, setManualOtherLocation] = useState('')
+  const [manualCurrency, setManualCurrency] = useState(customer.locationCards[0]?.currency || 'EUR')
+  const [manualHourlyRate, setManualHourlyRate] = useState<number | null>(null)
+  const [manualLaborTotal, setManualLaborTotal] = useState<number | null>(null)
   const [manualTechnician, setManualTechnician] = useState('')
-  const [manualRegularHours, setManualRegularHours] = useState<number | null>(0)
-  const [manualObhHours, setManualObhHours] = useState<number | null>(0)
-  const [manualWeekendHours, setManualWeekendHours] = useState<number | null>(0)
+  const [manualTravelStartTime, setManualTravelStartTime] = useState('')
+  const [manualOnSiteTime, setManualOnSiteTime] = useState('')
+  const [manualOffSiteTime, setManualOffSiteTime] = useState('')
+  const [manualTravelFinishTime, setManualTravelFinishTime] = useState('')
+  const [manualPublicHoliday, setManualPublicHoliday] = useState(false)
   const [manualConsumablesAmount, setManualConsumablesAmount] = useState<number | null>(0)
   const [manualConsumablesDescription, setManualConsumablesDescription] = useState('')
   const [selectedJobId, setSelectedJobId] = useState('')
-  const selectedManualLocation = customer.locationCards.find((location) => location.id === manualLocationId) ?? customer.locationCards[0] ?? null
-  const manualCategoryMode = selectedManualLocation ? getRateCardMode(selectedManualLocation) === 'category' : false
+  const currencyOptions = Array.from(new Set([...customer.locationCards.map((location) => location.currency), 'EUR', 'USD', 'SEK', 'NOK', 'DKK', 'GBP'].filter(Boolean)))
+    .map((currency) => ({ value: currency, label: currency }))
+  const manualLocationOptions = [
+    ...customer.locationCards.map((location) => ({ value: location.id, label: getLocationLabel(location) })),
+    { value: manualOtherLocationId, label: 'Other' },
+  ]
+  const isManualOtherLocation = manualLocationId === manualOtherLocationId
   const draft = useMemo(
     () => entryMode === 'report'
       ? parseCreateJobDraft(customer, { summary, sow, workReport, tytecTicket, sourceRow: jobs.length + 2 })
@@ -76,16 +101,22 @@ export function CreateJobModule({
         consumablesDescription: manualConsumablesDescription,
         customerTicket,
         locationId: manualLocationId,
-        obhHours: manualObhHours || 0,
-        regularHours: manualRegularHours || 0,
+        manualCurrency,
+        manualHourlyRate: manualHourlyRate || 0,
+        manualLaborTotal: manualLaborTotal || 0,
+        manualOtherLocation,
+        offSiteTime: manualOffSiteTime,
+        onSiteTime: manualOnSiteTime,
+        publicHoliday: manualPublicHoliday,
         serviceDate: manualServiceDate,
         sourceRow: jobs.length + 2,
         summary,
         technician: manualTechnician,
+        travelFinishTime: manualTravelFinishTime,
+        travelStartTime: manualTravelStartTime,
         tytecTicket,
-        weekendHours: manualCategoryMode ? 0 : manualWeekendHours || 0,
       }),
-    [customer, customerTicket, entryMode, jobs.length, manualCategoryMode, manualConsumablesAmount, manualConsumablesDescription, manualLocationId, manualObhHours, manualRegularHours, manualServiceDate, manualTechnician, manualWeekendHours, sow, summary, tytecTicket, workReport],
+    [customer, customerTicket, entryMode, jobs.length, manualConsumablesAmount, manualConsumablesDescription, manualCurrency, manualHourlyRate, manualLaborTotal, manualLocationId, manualOffSiteTime, manualOnSiteTime, manualOtherLocation, manualPublicHoliday, manualServiceDate, manualTechnician, manualTravelFinishTime, manualTravelStartTime, sow, summary, tytecTicket, workReport],
   )
   const pricedDraft = useMemo(
     () => (draft.job ? priceJob(customer, draft.job, undefined, fortnoxArticles) : null),
@@ -107,7 +138,8 @@ export function CreateJobModule({
 
   useEffect(() => {
     setEntryMode(customer.customerKey === 'TELE' || customer.customerKey === 'TELE-US' ? 'report' : 'manual')
-    setManualLocationId(customer.locationCards[0]?.id || '')
+    setManualLocationId(customer.locationCards[0]?.id || manualOtherLocationId)
+    setManualCurrency(customer.locationCards[0]?.currency || 'EUR')
   }, [customer])
 
   function resetForm() {
@@ -117,10 +149,15 @@ export function CreateJobModule({
     setTytecTicket('')
     setCustomerTicket('')
     setManualServiceDate('')
+    setManualOtherLocation('')
+    setManualHourlyRate(null)
+    setManualLaborTotal(null)
     setManualTechnician('')
-    setManualRegularHours(0)
-    setManualObhHours(0)
-    setManualWeekendHours(0)
+    setManualTravelStartTime('')
+    setManualOnSiteTime('')
+    setManualOffSiteTime('')
+    setManualTravelFinishTime('')
+    setManualPublicHoliday(false)
     setManualConsumablesAmount(0)
     setManualConsumablesDescription('')
   }
@@ -137,16 +174,18 @@ export function CreateJobModule({
   return (
     <>
       <Card className="workspace-card" variant="borderless">
-        <CustomerSummary
-          customer={customer}
-          items={[
-            { label: 'Legal ID', value: customer.customerLegalId || '-' },
-            { label: 'Customer Key', value: customer.customerKey || '-' },
-            { label: 'Job Records', value: jobs.length },
-            { label: 'Need Review', value: blockedJobs },
-            { label: 'Ready Records', value: readyJobs },
-          ]}
-        />
+        <div className="create-job-summary-strip">
+          <CustomerSummary
+            customer={customer}
+            items={[
+              { label: 'Legal ID', value: customer.customerLegalId || '-' },
+              { label: 'Customer Key', value: customer.customerKey || '-' },
+              { label: 'Job Records', value: jobs.length },
+              { label: 'Need Review', value: blockedJobs },
+              { label: 'Ready Records', value: readyJobs },
+            ]}
+          />
+        </div>
         <div className="toolbar-row">
           <div>
             <Typography.Text strong>Job Records</Typography.Text>
@@ -169,8 +208,8 @@ export function CreateJobModule({
           {entryMode === 'report' ? (
             <>
               <label className="create-job-entry-field">
-                <span>Tytec Ticket</span>
-                <Input onChange={(event) => setTytecTicket(event.target.value)} placeholder="Manual Tytec ticket" value={tytecTicket} />
+                <span>Ticket number</span>
+                <Input onChange={(event) => setTytecTicket(event.target.value)} placeholder="Ticket number" value={tytecTicket} />
               </label>
               <label className="create-job-entry-field create-job-entry-field-span-3">
                 <span>Jira Summary</span>
@@ -192,7 +231,7 @@ export function CreateJobModule({
                 <Input onChange={(event) => setCustomerTicket(event.target.value)} placeholder="Customer ticket or reference" value={customerTicket} />
               </label>
               <label className="create-job-entry-field">
-                <span>Tytec Ticket</span>
+                <span>Ticket number</span>
                 <Input onChange={(event) => setTytecTicket(event.target.value)} placeholder="Optional" value={tytecTicket} />
               </label>
               <label className="create-job-entry-field">
@@ -201,26 +240,52 @@ export function CreateJobModule({
               </label>
               <label className="create-job-entry-field">
                 <span>Rate Card Location</span>
-                <Select onChange={setManualLocationId} options={customer.locationCards.map((location) => ({ value: location.id, label: getLocationLabel(location) }))} value={manualLocationId || undefined} />
+                <Select onChange={setManualLocationId} options={manualLocationOptions} value={manualLocationId || undefined} />
               </label>
+              {isManualOtherLocation ? (
+                <>
+                  <label className="create-job-entry-field">
+                    <span>Manual Location</span>
+                    <Input onChange={(event) => setManualOtherLocation(event.target.value)} placeholder="City, site, or country" value={manualOtherLocation} />
+                  </label>
+                  <label className="create-job-entry-field">
+                    <span>Currency</span>
+                    <Select onChange={setManualCurrency} options={currencyOptions} value={manualCurrency} />
+                  </label>
+                  <label className="create-job-entry-field">
+                    <span>Hourly Rate</span>
+                    <InputNumber min={0} onChange={setManualHourlyRate} precision={2} value={manualHourlyRate} />
+                  </label>
+                  <label className="create-job-entry-field">
+                    <span>Labor Total</span>
+                    <InputNumber min={0} onChange={setManualLaborTotal} precision={2} value={manualLaborTotal} />
+                  </label>
+                </>
+              ) : null}
               <label className="create-job-entry-field">
                 <span>Technician</span>
                 <Input onChange={(event) => setManualTechnician(event.target.value)} placeholder="Technician name" value={manualTechnician} />
               </label>
               <label className="create-job-entry-field">
-                <span>{manualCategoryMode ? 'REG Hours' : '08:00-18:00 Hours'}</span>
-                <InputNumber min={0} onChange={setManualRegularHours} precision={2} value={manualRegularHours} />
+                <span>Travel Start</span>
+                <Select {...timeSelectProps(manualTravelStartTime, setManualTravelStartTime)} />
               </label>
               <label className="create-job-entry-field">
-                <span>{manualCategoryMode ? 'OBH1 Hours' : '18:00-08:00 Hours'}</span>
-                <InputNumber min={0} onChange={setManualObhHours} precision={2} value={manualObhHours} />
+                <span>On Site Start</span>
+                <Select {...timeSelectProps(manualOnSiteTime, setManualOnSiteTime)} />
               </label>
-              {!manualCategoryMode ? (
-                <label className="create-job-entry-field">
-                  <span>Weekend Hours</span>
-                  <InputNumber min={0} onChange={setManualWeekendHours} precision={2} value={manualWeekendHours} />
-                </label>
-              ) : null}
+              <label className="create-job-entry-field">
+                <span>Off Site Finish</span>
+                <Select {...timeSelectProps(manualOffSiteTime, setManualOffSiteTime)} />
+              </label>
+              <label className="create-job-entry-field">
+                <span>Travel Finish</span>
+                <Select {...timeSelectProps(manualTravelFinishTime, setManualTravelFinishTime)} />
+              </label>
+              <label className="create-job-entry-field create-job-check-field">
+                <span>Rate Exception</span>
+                <Checkbox checked={manualPublicHoliday} onChange={(event) => setManualPublicHoliday(event.target.checked)}>Public holiday</Checkbox>
+              </label>
               <label className="create-job-entry-field create-job-entry-field-span-2">
                 <span>Work Summary</span>
                 <Input onChange={(event) => setSummary(event.target.value)} placeholder="Short description of completed work" value={summary} />
@@ -246,7 +311,7 @@ export function CreateJobModule({
               <h3 className="section-title">Parsed Fields</h3>
               <div className="review-info-grid">
                 {field('Customer Ticket', pricedDraft.ticket)}
-                {field('Tytec Ticket', pricedDraft.jiraIssueKey || '-')}
+                {field('Ticket number', pricedDraft.jiraIssueKey || '-')}
                 {field('Location', pricedDraft.city)}
                 {field('Engineer', pricedDraft.technician)}
                 {field('Invoice Entity', pricedDraft.businessEntity || '-')}

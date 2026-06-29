@@ -29,8 +29,10 @@ import { ErpShell } from './shell/ErpShell'
 import { CustomersModule } from './modules/customers/CustomersModule'
 import { CustomerWorkspaceView } from './modules/customers/CustomerWorkspaceView'
 import { FortnoxModule } from './modules/fortnox/FortnoxModule'
-import { FortnoxQuotePage } from './modules/fortnox/FortnoxQuotePage'
+import { QuoteBuilderPage } from './modules/fortnox/QuoteBuilderPage'
 import { HomeModule } from './modules/home/HomeModule'
+import { RequestsModule } from './modules/requests/RequestsModule'
+import { normalizeRequestStatuses, type ServiceRequestRecord } from './modules/requests/requestTypes'
 import type { SavedQuote } from './modules/fortnox/quoteTypes'
 import { buildGeneratedInvoiceEntries } from './modules/invoice-prep/generatedInvoices'
 import { buildInvoiceSummary, compareInvoiceSummaries } from './modules/invoice-prep/invoiceSummary'
@@ -390,6 +392,16 @@ export function App() {
   }, [])
 
   useEffect(() => {
+    const syncRequestStatuses = () => updateState((current) => {
+      const requests = normalizeRequestStatuses(current.requests)
+      return requests === current.requests ? current : { ...current, requests }
+    })
+    syncRequestStatuses()
+    const timer = window.setInterval(syncRequestStatuses, 60 * 60 * 1000)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  useEffect(() => {
     const api = desktopWindow()
     const saveDocument = api?.saveDocument
     const debugLog = api?.debugLog
@@ -425,9 +437,12 @@ export function App() {
   function updateState(next: Partial<AppState> | ((current: AppState) => AppState)) {
     setState((current) => {
       const updated = typeof next === 'function' ? next(current) : { ...current, ...next }
-      saveState(updated)
-      void saveDbState(updated)
-      return updated
+      if (updated === current) return current
+      const requests = normalizeRequestStatuses(updated.requests)
+      const normalized = requests === updated.requests ? updated : { ...updated, requests }
+      saveState(normalized)
+      void saveDbState(normalized)
+      return normalized
     })
   }
 
@@ -507,6 +522,16 @@ export function App() {
     updateState((current) => ({
       ...current,
       activeView: 'home',
+      activeImportRunId: '',
+      selectedCustomerKey: '',
+      selectedInvoiceCustomerKey: '',
+    }))
+  }
+
+  function openRequests() {
+    updateState((current) => ({
+      ...current,
+      activeView: 'requests',
       activeImportRunId: '',
       selectedCustomerKey: '',
       selectedInvoiceCustomerKey: '',
@@ -754,6 +779,22 @@ export function App() {
     }))
   }
 
+  function saveRequest(request: ServiceRequestRecord) {
+    updateState((current) => ({
+      ...current,
+      requests: current.requests.some((currentRequest) => currentRequest.id === request.id)
+        ? current.requests.map((currentRequest) => (currentRequest.id === request.id ? request : currentRequest))
+        : [request, ...current.requests],
+    }))
+  }
+
+  function deleteRequest(requestId: string) {
+    updateState((current) => ({
+      ...current,
+      requests: current.requests.filter((request) => request.id !== requestId),
+    }))
+  }
+
   return (
     <AppProviders>
       <ErpShell
@@ -763,6 +804,7 @@ export function App() {
         onOpenCustomer={openCustomerWorkspace}
         onOpenCustomerTab={openCustomerWorkspaceTab}
         onOpenHome={openHome}
+        onOpenRequests={openRequests}
         onOpenCustomers={openCustomersIndex}
         onOpenFortnox={openFortnoxArticleMapping}
         onOpenQuoteTab={openQuoteBuilderTab}
@@ -787,6 +829,12 @@ export function App() {
             onOpenSavedQuotes={() => openQuoteBuilderTab('saved')}
             quotes={state.quotes}
           />
+        ) : state.activeView === 'requests' ? (
+          <RequestsModule
+            requests={state.requests}
+            onDeleteRequest={deleteRequest}
+            onSaveRequest={saveRequest}
+          />
         ) : state.activeView === 'fortnox' ? (
           <FortnoxModule
             customer={fortnoxCustomer}
@@ -796,7 +844,7 @@ export function App() {
             onSetArticle={saveFortnoxArticle}
           />
         ) : state.activeView === 'quote-builder' ? (
-          <FortnoxQuotePage
+          <QuoteBuilderPage
             activeTab={state.quoteBuilderTab}
             customers={state.customers}
             quotes={state.quotes}

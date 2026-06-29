@@ -1,0 +1,120 @@
+.requests-tab-shell {
+  display: grid;
+  gap: var(--erp-gap);
+}
+
+.request-detail-view {
+  display: grid;
+  gap: 10px;
+}
+
+.request-expanded-panel {
+  display: grid;
+  gap: 8px;
+}
+
+.request-expanded-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.request-expanded-grid .info-field {
+  padding: 7px 9px;
+}
+
+.request-expanded-section-title {
+  grid-column: 1 / -1;
+  padding-top: 4px;
+  border-top: 1px solid var(--erp-border-soft);
+  color: #42566d;
+  font-size: 11px;
+  font-weight: 680;
+}
+
+.request-expanded-section-title:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.request-expanded-wide {
+  grid-column: span 2;
+}
+
+.request-expanded-full {
+  grid-column: 1 / -1;
+}
+
+.request-status-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.request-status-row .info-field {
+  padding: 7px 9px;
+}
+
+.request-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.request-form-section-title {
+  grid-column: span 2;
+  padding-top: 4px;
+  border-top: 1px solid var(--erp-border-soft);
+  color: #42566d;
+  font-size: 11px;
+  font-weight: 680;
+}
+
+.request-form-section-title:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.request-form-field {
+  display: grid;
+  gap: 6px;
+}
+
+.request-form-span-2 {
+  grid-column: span 2;
+}
+
+.request-form-field > span {
+  color: #65778a;
+  font-size: 8.5px;
+  font-weight: 640;
+  letter-spacing: 0.065em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.request-form-field .ant-input,
+.request-form-field .ant-input-number,
+.request-form-field .ant-select {
+  width: 100%;
+}
+
+@media (max-width: 760px) {
+  .request-expanded-grid,
+  .request-form-grid,
+  .request-status-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .request-expanded-wide,
+  .request-expanded-full,
+  .request-form-span-2 {
+    grid-column: auto;
+  }
+
+  .request-expanded-section-title,
+  .request-form-section-title {
+    grid-column: auto;
+  }
+}

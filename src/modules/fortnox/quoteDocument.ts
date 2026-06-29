@@ -27,6 +27,16 @@ type QuoteHtmlTravelGroup = {
   details: string[]
 }
 
+type QuoteHtmlWorkPackage = {
+  title: string
+  type: string
+  route: string
+  timing: string
+  technicians: string
+  serviceWindow: string
+  details: string[]
+}
+
 function paragraphMarkup(value: string) {
   const parts = String(value || '')
     .split(/\n{2,}/)
@@ -58,11 +68,13 @@ export function buildCustomerQuoteHtml(input: {
   quoteName: string
   workLocation: string
   currency: string
+  validityDays: number
   serviceType: string
   deliveryMode: string
   summaryText: string
   assumptions: string
   basics: Array<{ label: string; value: string }>
+  workPackages: QuoteHtmlWorkPackage[]
   laborDetails: string[]
   laborTariffRows?: QuoteHtmlTariffRow[]
   laborNote: string
@@ -74,8 +86,9 @@ export function buildCustomerQuoteHtml(input: {
   total: string
 }) {
   const issueDate = new Date()
+  const validityDays = Math.max(1, input.validityDays || 30)
   const validUntil = new Date(issueDate)
-  validUntil.setDate(validUntil.getDate() + 30)
+  validUntil.setDate(validUntil.getDate() + validityDays)
   const dateFormatter = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
   const issueDateLabel = dateFormatter.format(issueDate)
   const validUntilLabel = dateFormatter.format(validUntil)
@@ -88,6 +101,32 @@ export function buildCustomerQuoteHtml(input: {
     `)
     .join('')
   const scopeMarkup = paragraphMarkup(input.summaryText)
+  const workPackageMarkup = input.workPackages.length
+    ? `<table class="work-package-table">
+        <colgroup>
+          <col style="width: 22%" />
+          <col style="width: 28%" />
+          <col style="width: 16%" />
+          <col style="width: 34%" />
+        </colgroup>
+        <thead>
+          <tr>
+            <th>Package</th>
+            <th>Route / Site</th>
+            <th>Timing</th>
+            <th>Details</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${input.workPackages.map((item) => `<tr>
+            <td><strong>${escapeHtml(item.title)}</strong><br /><span class="muted">${escapeHtml(item.type)}</span></td>
+            <td>${escapeHtml(item.route)}</td>
+            <td>${escapeHtml(item.timing)}<br /><span class="muted">${escapeHtml(item.serviceWindow)}</span></td>
+            <td>${escapeHtml(item.technicians === '-' ? '-' : `${item.technicians} tech${item.technicians === '1' ? '' : 's'}`)}<br /><span class="muted">${escapeHtml(item.details.join(' · '))}</span></td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`
+    : ''
   const laborTariffMarkup = input.laborTariffRows?.length
     ? `<table class="tariff-table">
         <colgroup>
@@ -178,6 +217,10 @@ export function buildCustomerQuoteHtml(input: {
     .tariff-table th, .tariff-table td { padding-right: 16px; text-align: left; }
     .tariff-table th:nth-child(n + 2), .tariff-table td:nth-child(n + 2) { text-align: right; }
     .tariff-table th:last-child, .tariff-table td:last-child { padding-right: 0; }
+    .work-package-table { table-layout: fixed; }
+    .work-package-table th, .work-package-table td { text-align: left !important; padding-right: 14px; line-height: 1.42; }
+    .work-package-table th:last-child, .work-package-table td:last-child { text-align: left !important; padding-right: 0; }
+    .muted { color: #60708a; }
     th, td { text-align: left; padding: 8px 10px 8px 0; border-bottom: 1px solid #e4ebf2; font-size: 12px; vertical-align: top; font-variant-numeric: tabular-nums; }
     th { color: #60708a; font-size: 12px; font-weight: 600; letter-spacing: 0; text-transform: none; }
     th:last-child, td:last-child { text-align: right; padding-right: 0; }
@@ -217,7 +260,7 @@ export function buildCustomerQuoteHtml(input: {
     </div>
 
     <div class="notice">
-      This quotation is valid for 30 calendar days from issue date and is subject to resource availability, site access confirmation, and the commercial assumptions stated below.
+      This quotation is valid for ${escapeHtml(String(validityDays))} calendar days from issue date and is subject to resource availability, site access confirmation, and the commercial assumptions stated below.
     </div>
 
     <div class="meta">
@@ -225,6 +268,7 @@ export function buildCustomerQuoteHtml(input: {
     </div>
 
     ${sectionMarkup('Scope Summary', scopeMarkup)}
+    ${sectionMarkup('Work Packages', workPackageMarkup)}
     ${sectionMarkup('Labor', laborMarkup)}
     ${sectionMarkup('Travel & Stay', travelMarkup)}
     ${sectionMarkup('Extras', extrasMarkup)}

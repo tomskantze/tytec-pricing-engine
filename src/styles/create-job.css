@@ -1,3 +1,24 @@
+.create-job-summary-strip .metric-strip {
+  grid-template-columns: repeat(auto-fit, minmax(86px, max-content));
+  justify-content: start;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.create-job-summary-strip .metric-card {
+  min-height: 34px;
+  min-width: 92px;
+  padding: 5px 8px;
+}
+
+.create-job-summary-strip .metric-card strong {
+  font-size: 11.5px;
+}
+
+.create-job-record-total-row td:last-child {
+  text-align: right;
+}
+
 .create-job-entry-grid,
 .create-job-preview-grid {
   display: grid;
@@ -44,6 +65,11 @@
 .create-job-entry-field .ant-input-number,
 .create-job-entry-field .ant-select {
   width: 100%;
+}
+
+.create-job-check-field .ant-checkbox-wrapper {
+  min-height: 32px;
+  align-items: center;
 }
 
 .create-job-preview-grid {
