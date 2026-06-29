@@ -1,9 +1,10 @@
 import { Button, Card, Input, Select, Space } from 'antd'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { Customer, InvoiceMode } from '../../domain/types'
 import { PageHeader } from '../../design-system/PageHeader'
 import type { QuoteBuilderTab } from '../../state/appState'
-import type { SavedQuote } from './quoteTypes'
+import type { ServiceRequestRecord } from '../requests/requestTypes'
+import type { QuoteDraft, SavedQuote } from './quoteTypes'
 import { QuoteBuilderModule } from './QuoteBuilderModule'
 import { SavedQuotesPanel } from './SavedQuotesPanel'
 
@@ -23,6 +24,36 @@ function normalizeManualCustomerKey(name: string, explicitKey: string) {
   return normalized || 'QUOTE'
 }
 
+function normalizeEntityKey(value: string) {
+  return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '')
+}
+
+function requestCompanyName(request: ServiceRequestRecord) {
+  return request.companyName.trim() || request.contactName.trim() || request.email.trim() || 'Request Customer'
+}
+
+function requestQuoteName(request: ServiceRequestRecord) {
+  const company = requestCompanyName(request)
+  const summary = request.requestSummary.trim()
+  return summary ? `${company} - ${summary}` : `${company} quote`
+}
+
+function requestDraftPrefill(request: ServiceRequestRecord): Partial<QuoteDraft> {
+  return {
+    sourceRequestId: request.id,
+    quoteName: requestQuoteName(request),
+    customerContactName: request.contactName,
+    customerContactEmail: request.email,
+    workLocation: request.locations,
+    summaryText: request.requestSummary,
+  }
+}
+
+function isPotentialQuoteRequest(request: ServiceRequestRecord) {
+  return !['Applicant', 'Vendor', 'Spam'].includes(request.kind)
+    && !['Applicant', 'Spam', 'Not relevant', 'Duplicate'].includes(request.status)
+}
+
 function createQuoteCustomerStub(name: string, customerKey: string): Customer {
   return {
     name,
@@ -40,16 +71,22 @@ function createQuoteCustomerStub(name: string, customerKey: string): Customer {
 export function QuoteBuilderPage({
   activeTab,
   customers,
+  requests,
+  requestedRequestId,
   quotes,
   onDeleteQuote,
+  onRequestLoaded,
   onSaveQuote,
   onSelectCustomer,
   onSelectTab,
 }: {
   activeTab: QuoteBuilderTab
   customers: Customer[]
+  requests: ServiceRequestRecord[]
+  requestedRequestId?: string
   quotes: SavedQuote[]
   onDeleteQuote: (quoteId: string) => void
+  onRequestLoaded?: () => void
   onSaveQuote: (quote: SavedQuote) => void
   onSelectCustomer: (customerKey: string) => void
   onSelectTab: (tab: QuoteBuilderTab) => void
@@ -58,6 +95,8 @@ export function QuoteBuilderPage({
   const [manualCustomerName, setManualCustomerName] = useState('')
   const [manualCustomerKey, setManualCustomerKey] = useState('')
   const [editorCustomer, setEditorCustomer] = useState<Customer | null>(null)
+  const [sourceRequestId, setSourceRequestId] = useState('')
+  const [draftPrefill, setDraftPrefill] = useState<Partial<QuoteDraft> | undefined>(undefined)
   const [requestedQuoteId, setRequestedQuoteId] = useState('')
   const [builderInstanceKey, setBuilderInstanceKey] = useState(0)
   const manualCustomer = useMemo(() => {
@@ -74,6 +113,22 @@ export function QuoteBuilderPage({
       .sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: 'base' }))
       .map((customer) => ({ value: customer.customerKey, label: customer.name })),
     [customers],
+  )
+  const requestOptions = useMemo(
+    () => requests
+      .filter(isPotentialQuoteRequest)
+      .map((request) => {
+        const company = requestCompanyName(request)
+        const detail = [request.contactName, request.email, request.locations].filter(Boolean).join(' · ')
+        return {
+          value: request.id,
+          label: detail ? `${company} - ${detail}` : company,
+          sortLabel: company,
+        }
+      })
+      .sort((left, right) => left.sortLabel.localeCompare(right.sortLabel, undefined, { sensitivity: 'base' }))
+      .map(({ value, label }) => ({ value, label })),
+    [requests],
   )
 
   async function saveQuotePdfAs(quoteId: string) {
@@ -92,9 +147,47 @@ export function QuoteBuilderPage({
     return existingCustomer || createQuoteCustomerStub(quote.customerName, quote.customerKey)
   }
 
+  function findExistingCustomerForRequest(request: ServiceRequestRecord) {
+    const requestNameKey = normalizeEntityKey(request.companyName || request.contactName)
+    if (!requestNameKey) return null
+    return customers.find((customer) => (
+      normalizeEntityKey(customer.name) === requestNameKey
+      || normalizeEntityKey(customer.customerLegalName || '') === requestNameKey
+      || normalizeEntityKey(customer.customerKey) === requestNameKey
+    )) ?? null
+  }
+
+  function startQuoteFromRequest(request: ServiceRequestRecord) {
+    const existingCustomer = findExistingCustomerForRequest(request)
+    const company = requestCompanyName(request)
+    const quoteCustomer = existingCustomer || createQuoteCustomerStub(company, normalizeManualCustomerKey(company, ''))
+    setEditorCustomer(quoteCustomer)
+    setSourceRequestId(request.id)
+    setDraftPrefill(requestDraftPrefill(request))
+    setRequestedQuoteId('')
+    setBuilderStartMode('new')
+    setManualCustomerName('')
+    setManualCustomerKey('')
+    setBuilderInstanceKey((current) => current + 1)
+    if (existingCustomer) onSelectCustomer(existingCustomer.customerKey)
+    onSelectTab('builder')
+  }
+
+  function selectRequestContact(requestId?: string) {
+    if (!requestId) {
+      setSourceRequestId('')
+      setDraftPrefill(undefined)
+      return
+    }
+    const request = requests.find((item) => item.id === requestId)
+    if (request) startQuoteFromRequest(request)
+  }
+
   function selectExistingCustomer(customerKey?: string) {
     const selectedCustomer = customers.find((item) => item.customerKey === customerKey) ?? null
     setEditorCustomer(selectedCustomer)
+    setSourceRequestId('')
+    setDraftPrefill(undefined)
     setRequestedQuoteId('')
     setBuilderStartMode('new')
     setManualCustomerName('')
@@ -106,11 +199,21 @@ export function QuoteBuilderPage({
   function useManualCustomer() {
     if (!manualCustomer) return
     setEditorCustomer(manualCustomer)
+    setSourceRequestId('')
+    setDraftPrefill(undefined)
     setRequestedQuoteId('')
     setBuilderStartMode('new')
     setBuilderInstanceKey((current) => current + 1)
     onSelectTab('builder')
   }
+
+  useEffect(() => {
+    if (!requestedRequestId) return
+    const request = requests.find((item) => item.id === requestedRequestId)
+    if (!request) return
+    startQuoteFromRequest(request)
+    onRequestLoaded?.()
+  }, [requestedRequestId, requests])
 
   return (
     <>
@@ -129,6 +232,17 @@ export function QuoteBuilderPage({
                 value={selectedExistingCustomerKey}
               />
             </label>
+            <label>
+              <span>Request contact</span>
+              <Select
+                allowClear
+                onChange={(value) => selectRequestContact(value)}
+                options={requestOptions}
+                placeholder="Pick from Requests"
+                showSearch
+                value={sourceRequestId || undefined}
+              />
+            </label>
             <div className="fortnox-quote-new-customer">
               <label><span>New customer</span><Input onChange={(event) => setManualCustomerName(event.target.value)} placeholder="Customer name" value={manualCustomerName} /></label>
               <label><span>Customer key</span><Input onChange={(event) => setManualCustomerKey(event.target.value)} placeholder="Optional" value={manualCustomerKey} /></label>
@@ -139,6 +253,7 @@ export function QuoteBuilderPage({
           </section>
             <QuoteBuilderModule
               customer={editorCustomer}
+              draftPrefill={draftPrefill}
               key={`${editorCustomer?.customerKey || 'none'}-${builderInstanceKey}`}
               onDeleteQuote={onDeleteQuote}
               onQuoteLoaded={() => setRequestedQuoteId('')}

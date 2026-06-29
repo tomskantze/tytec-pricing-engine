@@ -256,6 +256,7 @@ function uniqueQuoteRef(baseRef: string, quoteId: string, quotes: SavedQuote[]) 
 
 export function QuoteBuilderModule({
   customer,
+  draftPrefill,
   onBackToLaunch,
   onDeleteQuote,
   onQuoteLoaded,
@@ -265,6 +266,7 @@ export function QuoteBuilderModule({
   startMode = 'draft',
 }: {
   customer: Customer | null
+  draftPrefill?: Partial<QuoteDraft>
   onBackToLaunch?: () => void
   onDeleteQuote: (quoteId: string) => void
   onQuoteLoaded?: (quoteId: string) => void
@@ -293,6 +295,7 @@ export function QuoteBuilderModule({
   const [draftReady, setDraftReady] = useState(false)
   const [quoteRef, setQuoteRef] = useState(customerDefaults.quoteRef)
   const [quoteName, setQuoteName] = useState('')
+  const [sourceRequestId, setSourceRequestId] = useState('')
   const [customerContactName, setCustomerContactName] = useState('')
   const [customerContactEmail, setCustomerContactEmail] = useState('')
   const [workLocation, setWorkLocation] = useState('')
@@ -387,7 +390,7 @@ export function QuoteBuilderModule({
     const storedSession = startMode === 'draft' ? loadQuoteDraftSession(activeCustomer.customerKey, defaults) : null
     if (storedSession) applyDraft(storedSession.draft, storedSession.activeQuoteId, storedSession.step)
     else {
-      applyDraft(createQuoteDraftDefaults(defaults), '', 0)
+      applyDraft({ ...createQuoteDraftDefaults(defaults), ...draftPrefill }, '', 0)
     }
     setDraftReady(true)
   }, [activeCustomer?.customerKey, startMode])
@@ -755,6 +758,7 @@ export function QuoteBuilderModule({
     return {
       quoteRef,
       quoteName,
+      sourceRequestId,
       customerContactName,
       customerContactEmail,
       workLocation,
@@ -816,6 +820,7 @@ export function QuoteBuilderModule({
     setStep(nextStep)
     setQuoteRef(draft.quoteRef)
     setQuoteName(draft.quoteName)
+    setSourceRequestId(draft.sourceRequestId || '')
     setCustomerContactName(draft.customerContactName || '')
     setCustomerContactEmail(draft.customerContactEmail || '')
     setWorkLocation(draft.workLocation)
@@ -869,12 +874,12 @@ export function QuoteBuilderModule({
   }
 
   function resetDraft() {
-    applyDraft(createQuoteDraftDefaults({
+    applyDraft({ ...createQuoteDraftDefaults({
       currency: activeCustomer?.locationCards[0]?.currency || 'EUR',
       rateCardLocationId: activeCustomer?.locationCards[0]?.id || '',
       customerKey: activeCustomer?.customerKey || '',
       quoteRef: nextQuoteRefForCustomer(activeCustomer?.customerKey || '', customerQuotes),
-    }), '', 0)
+    }), ...draftPrefill }, '', 0)
   }
 
   function handleRateSourceChange(nextRateSource: QuoteRateSource) {
@@ -901,6 +906,7 @@ export function QuoteBuilderModule({
     const nextQuoteRef = uniqueQuoteRef(generatedRef, quoteId, customerQuotes)
     return {
       id: quoteId,
+      sourceRequestId,
       customerKey: activeCustomer.customerKey,
       customerName: activeCustomer.name,
       quoteRef: nextQuoteRef,
@@ -1050,6 +1056,7 @@ export function QuoteBuilderModule({
     [
       quoteRef,
       quoteName,
+      sourceRequestId,
       customerContactName,
       customerContactEmail,
       workLocation,

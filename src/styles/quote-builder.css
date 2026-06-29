@@ -1,6 +1,6 @@
 .fortnox-quote-customer-strip {
   display: grid;
-  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  grid-template-columns: minmax(200px, 260px) minmax(240px, 340px) minmax(0, 1fr);
   align-items: end;
   gap: 12px;
   margin-bottom: 12px;

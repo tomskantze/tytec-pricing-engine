@@ -61,6 +61,7 @@ export type QuoteExtraItem = {
 export type QuoteDraft = {
   quoteRef: string
   quoteName: string
+  sourceRequestId: string
   customerContactName: string
   customerContactEmail: string
   workLocation: string
@@ -118,6 +119,7 @@ export type QuoteDraft = {
 
 export type SavedQuote = {
   id: string
+  sourceRequestId: string
   customerKey: string
   customerName: string
   quoteRef: string
@@ -226,6 +228,7 @@ export function createQuoteDraftDefaults(defaults?: {
   return {
     quoteRef: defaults?.quoteRef || createDefaultQuoteRef(defaults?.customerKey),
     quoteName: '',
+    sourceRequestId: '',
     customerContactName: '',
     customerContactEmail: '',
     workLocation: '',

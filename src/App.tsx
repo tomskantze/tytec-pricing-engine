@@ -374,6 +374,7 @@ function updateRunDocumentMeta(state: AppState, documentId: string, nextDocument
 
 export function App() {
   const [state, setState] = useState<AppState>(() => loadState())
+  const [quoteBuilderRequestId, setQuoteBuilderRequestId] = useState('')
 
   useEffect(() => {
     let isMounted = true
@@ -562,6 +563,15 @@ export function App() {
       ...current,
       activeView: 'quote-builder',
       quoteBuilderTab: tab,
+    }))
+  }
+
+  function openQuoteBuilderForRequest(request: ServiceRequestRecord) {
+    setQuoteBuilderRequestId(request.id)
+    updateState((current) => ({
+      ...current,
+      activeView: 'quote-builder',
+      quoteBuilderTab: 'builder',
     }))
   }
 
@@ -832,6 +842,7 @@ export function App() {
         ) : state.activeView === 'requests' ? (
           <RequestsModule
             requests={state.requests}
+            onCreateQuoteFromRequest={openQuoteBuilderForRequest}
             onDeleteRequest={deleteRequest}
             onSaveRequest={saveRequest}
           />
@@ -847,8 +858,11 @@ export function App() {
           <QuoteBuilderPage
             activeTab={state.quoteBuilderTab}
             customers={state.customers}
+            requestedRequestId={quoteBuilderRequestId}
+            requests={state.requests}
             quotes={state.quotes}
             onDeleteQuote={deleteQuote}
+            onRequestLoaded={() => setQuoteBuilderRequestId('')}
             onSaveQuote={saveQuote}
             onSelectCustomer={(selectedFortnoxCustomerKey) => updateState({ selectedFortnoxCustomerKey })}
             onSelectTab={openQuoteBuilderTab}

@@ -99,10 +99,12 @@ function field(label: string, value: string, wrap = false, className = '') {
 
 export function RequestsModule({
   requests,
+  onCreateQuoteFromRequest,
   onDeleteRequest,
   onSaveRequest,
 }: {
   requests: ServiceRequestRecord[]
+  onCreateQuoteFromRequest: (request: ServiceRequestRecord) => void
   onDeleteRequest: (requestId: string) => void
   onSaveRequest: (request: ServiceRequestRecord) => void
 }) {
@@ -221,13 +223,22 @@ export function RequestsModule({
             <span className="home-section-label">Request Detail</span>
             <strong className="home-section-value">{request.companyName || request.contactName || request.email || '-'}</strong>
           </div>
-          <Button onClick={(event) => {
-            event.stopPropagation()
-            editRequest(request)
-          }}
-          >
-            Edit Request
-          </Button>
+          <Space>
+            <Button onClick={(event) => {
+              event.stopPropagation()
+              onCreateQuoteFromRequest(request)
+            }}
+            >
+              Create Quote
+            </Button>
+            <Button onClick={(event) => {
+              event.stopPropagation()
+              editRequest(request)
+            }}
+            >
+              Edit Request
+            </Button>
+          </Space>
         </div>
         <div className="request-expanded-grid">
           <span className="request-expanded-section-title">Request</span>
