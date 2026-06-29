@@ -33,6 +33,16 @@
   min-width: 0;
 }
 
+.fortnox-quote-request-select .ant-select-selector,
+.fortnox-quote-request-select .ant-select-selection-wrap {
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.fortnox-quote-request-select .ant-select-selection-item {
+  max-width: calc(100% - 28px);
+}
+
 .fortnox-quote-customer-strip .ant-select-selection-item,
 .fortnox-request-contact-option {
   display: block;

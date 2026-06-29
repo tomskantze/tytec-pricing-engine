@@ -38,6 +38,11 @@ function requestQuoteName(request: ServiceRequestRecord) {
   return summary ? `${company} - ${summary}` : `${company} quote`
 }
 
+function capRequestLabel(value: string) {
+  const normalized = value.replace(/\s+/g, ' ').trim()
+  return normalized.length > 44 ? `${normalized.slice(0, 41).trimEnd()}...` : normalized
+}
+
 function requestDraftPrefill(request: ServiceRequestRecord): Partial<QuoteDraft> {
   return {
     sourceRequestId: request.id,
@@ -119,16 +124,16 @@ export function QuoteBuilderPage({
       .filter(isPotentialQuoteRequest)
       .map((request) => {
         const company = requestCompanyName(request)
-        const detail = [request.contactName, request.email, request.locations].filter(Boolean).join(' · ')
+        const contact = request.contactName.trim()
+        const label = contact && normalizeEntityKey(contact) !== normalizeEntityKey(company)
+          ? `${company} - ${contact}`
+          : company
+        const title = [company, contact, request.email, request.locations].filter(Boolean).join(' - ')
         return {
           value: request.id,
-          label: (
-            <span className="fortnox-request-contact-option" title={detail ? `${company} - ${detail}` : company}>
-              {detail ? `${company} - ${detail}` : company}
-            </span>
-          ),
+          label: capRequestLabel(label),
           sortLabel: company,
-          title: detail ? `${company} - ${detail}` : company,
+          title,
         }
       })
       .sort((left, right) => left.sortLabel.localeCompare(right.sortLabel, undefined, { sensitivity: 'base' }))
@@ -241,6 +246,7 @@ export function QuoteBuilderPage({
               <span>Request contact</span>
               <Select
                 allowClear
+                className="fortnox-quote-request-select"
                 onChange={(value) => selectRequestContact(value)}
                 optionFilterProp="title"
                 options={requestOptions}
